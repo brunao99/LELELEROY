@@ -1,0 +1,13 @@
+# Abre o app limpo: tela inicial vazia e configurações.
+# Rodar: maestro test e2e/00-inicio.yaml
+appId: com.brunao99.bobina
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Nenhum projeto ainda"
+- assertVisible: "Novo projeto"
+- tapOn: "Configurações"
+- assertVisible: "Armazenamento"
+- assertVisible: "Legendas automáticas"
+- tapOn: "Voltar"
+- assertVisible: "Novo projeto"

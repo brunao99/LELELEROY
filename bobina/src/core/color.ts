@@ -127,7 +127,7 @@ const TEAL_ORANGE: ColorMatrix = [
   0, 0, 0, 1, 0,
 ];
 
-/** Filtros próprios do Bobina. Nenhum vem do CapCut. */
+/** Filtros próprios do Bobina, feitos do zero. */
 export const FILTERS: FilterPreset[] = [
   { id: 'vivo', name: 'Vivo', adjust: { saturation: 35, contrast: 12 } },
   { id: 'suave', name: 'Suave', adjust: { contrast: -18, brightness: 8, saturation: -10 } },

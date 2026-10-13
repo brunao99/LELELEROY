@@ -1,0 +1,6 @@
+{
+  "name": "Bobina",
+  "avoid": ["CapCut", "ByteDance", "Jianying"],
+  "domains": ["capcut.com", "bytedance.com"],
+  "colors": []
+}

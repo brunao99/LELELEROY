@@ -1,0 +1,41 @@
+# F02–F06, F11, F12, F16: edita o primeiro projeto da lista.
+# Rodar depois de 01-criar-projeto.yaml.
+appId: com.brunao99.bobina
+---
+- launchApp
+- tapOn:
+    text: "Projeto .*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Exportar"
+    timeout: 30000
+# Tocar e pausar
+- tapOn: "Tocar"
+- waitForAnimationToEnd
+- tapOn: "Pausar"
+# Texto na agulha
+- tapOn: "Texto"
+- assertVisible: "Digite o texto"
+- inputText: "Olá Bobina"
+- tapOn: "Confirmar"
+# Anda uns 2 s na timeline, seleciona o clipe sob a agulha e divide
+- tapOn: "Voltar"
+- swipe:
+    start: "65%, 78%"
+    end: "35%, 78%"
+    duration: 600
+- tapOn: "Editar"
+- tapOn: "Dividir"
+- tapOn: "Desfazer"
+# Velocidade 2x
+- tapOn: "Editar"
+- tapOn: "Velocidade"
+- tapOn: "2.0x"
+- tapOn: "Confirmar"
+- extendedWaitUntil:
+    notVisible: "Aplicando velocidade.*"
+    timeout: 120000
+# Filtro
+- tapOn: "Filtros"
+- tapOn: "Vivo"
+- tapOn: "Confirmar"
