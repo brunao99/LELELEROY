@@ -54,7 +54,13 @@ export default function EditorScreen() {
         if (cancelled) return;
         // Caches apagados são refeitos; mídias que sumiram ficam marcadas.
         const { project: p, missingAssets } = checkProjectFiles(loaded, { prune: true });
-        if (p !== loaded) saveProject(p);
+        if (p !== loaded) {
+          try {
+            saveProject(p);
+          } catch {
+            // O salvamento automático tenta de novo na próxima edição.
+          }
+        }
         open(p, missingAssets);
       })
       .catch((e) => !cancelled && setError(String(e?.message ?? e)));
