@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Bobina",
+    "name": "Ledit's",
     "slug": "bobina",
     "scheme": "bobina",
     "version": "0.1.0",
@@ -31,23 +31,23 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "O Bobina abre a sua galeria para você escolher os vídeos e fotos do projeto.",
+          "photosPermission": "O Ledit's abre a sua galeria para você escolher os vídeos e fotos do projeto.",
           "cameraPermission": false,
-          "microphonePermission": "O Bobina usa o microfone para gravar narrações."
+          "microphonePermission": "O Ledit's usa o microfone para gravar narrações."
         }
       ],
       [
         "expo-audio",
         {
-          "microphonePermission": "O Bobina usa o microfone para gravar narrações.",
+          "microphonePermission": "O Ledit's usa o microfone para gravar narrações.",
           "enableBackgroundPlayback": false
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "O Bobina precisa de acesso à galeria para salvar os vídeos exportados.",
-          "savePhotosPermission": "O Bobina salva os vídeos exportados na sua galeria.",
+          "photosPermission": "O Ledit's precisa de acesso à galeria para salvar os vídeos exportados.",
+          "savePhotosPermission": "O Ledit's salva os vídeos exportados na sua galeria.",
           "granularPermissions": ["video"]
         }
       ],

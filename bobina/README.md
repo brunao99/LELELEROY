@@ -1,4 +1,4 @@
-# Bobina
+# Ledit's
 
 Editor de vídeo para Android e iOS com os recursos centrais dos editores de
 celular, feito do zero (nenhum código, efeito, fonte ou música copiado de

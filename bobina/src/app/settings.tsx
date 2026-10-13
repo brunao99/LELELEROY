@@ -138,7 +138,7 @@ export default function Settings() {
 
         <SectionLabel>Sobre</SectionLabel>
         <View style={styles.card}>
-          <Txt variant="sm">Bobina 0.1.0 · projeto pessoal</Txt>
+          <Txt variant="sm">{"Ledit's 0.1.0 · projeto pessoal"}</Txt>
           <Txt variant="xs" tone="muted">
             Fontes do texto: {FONT_LICENSES.join(', ')}. Ícones: Lucide (ISC). Motor de vídeo: React Native Skia e
             react-native-skia-video (MIT). Reconhecimento de fala: whisper.cpp (MIT).

@@ -1,11 +1,11 @@
-import { Film, MoreVertical } from 'lucide-react-native';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { Film, MoreHorizontal } from 'lucide-react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { formatTime } from '@/core/time';
 import { fileUri } from '@/storage/paths';
 import type { ProjectSummary } from '@/storage/projects';
-import { IconButton } from '@/ui/Button';
-import { Txt } from '@/ui/Text';
+import { PressableScale } from '@/ui/PressableScale';
 import { colors, radius, space } from '@/ui/theme';
 
 export function relativeDate(ms: number, now = Date.now()): string {
@@ -29,54 +29,60 @@ export interface ProjectCardProps {
 
 export function ProjectCard({ summary, onOpen, onMenu }: ProjectCardProps) {
   const cover = summary.cover ? fileUri(summary.id, summary.cover) : null;
+  const openMenu = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    onMenu();
+  };
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${summary.name}, ${formatTime(summary.duration, false)}, editado ${relativeDate(summary.updatedAt)}`}
-      accessibilityHint="Abre o projeto"
-      onPress={onOpen}
-      onLongPress={onMenu}
-      style={({ pressed }) => [styles.card, pressed ? { opacity: 0.85 } : null]}
-    >
-      <View style={styles.thumb}>
+    <View style={styles.card}>
+      <PressableScale
+        accessibilityRole="button"
+        accessibilityLabel={`${summary.name}, ${formatTime(summary.duration, false)}, editado ${relativeDate(summary.updatedAt)}`}
+        accessibilityHint="Abre o projeto. Segure para ver as opções."
+        onPress={onOpen}
+        onLongPress={openMenu}
+        delayLongPress={350}
+        style={styles.thumb}
+      >
         {cover ? (
-          <Image
-            key={summary.updatedAt}
-            source={{ uri: cover }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-            accessibilityIgnoresInvertColors
-          />
+          <Image key={summary.updatedAt} source={{ uri: cover }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityIgnoresInvertColors />
         ) : (
-          <Film size={28} color={colors.textFaint} />
+          <Film size={28} color={colors.textFaint} strokeWidth={1.5} />
         )}
         <View style={styles.duration}>
-          <Txt variant="xs" weight="600" tabular>
-            {formatTime(summary.duration, false)}
-          </Txt>
+          <Text style={styles.durationText}>{formatTime(summary.duration, false)}</Text>
         </View>
-      </View>
+      </PressableScale>
       <View style={styles.meta}>
-        <View style={{ flex: 1 }}>
-          <Txt variant="sm" weight="600" numberOfLines={1}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.name} numberOfLines={1}>
             {summary.name}
-          </Txt>
-          <Txt variant="xs" tone="muted">
-            {relativeDate(summary.updatedAt)}
-          </Txt>
+          </Text>
+          <Text style={styles.date}>{relativeDate(summary.updatedAt)}</Text>
         </View>
-        <IconButton icon={MoreVertical} label={`Opções de ${summary.name}`} onPress={onMenu} size={18} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Opções de ${summary.name}`}
+          onPress={openMenu}
+          hitSlop={12}
+          style={({ pressed }) => [styles.more, pressed && { opacity: 0.5 }]}
+        >
+          <MoreHorizontal size={18} color={colors.textMuted} />
+        </Pressable>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { flex: 1, gap: space[1] },
+  card: { flex: 1, gap: space[2] },
   thumb: {
-    aspectRatio: 1,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceRaised,
+    aspectRatio: 3 / 4,
+    borderRadius: 12,
+    borderCurve: 'continuous',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -85,10 +91,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: space[2],
     bottom: space[2],
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: radius.sm,
-    paddingHorizontal: 6,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: radius.pill,
+    paddingHorizontal: 7,
     paddingVertical: 2,
   },
-  meta: { flexDirection: 'row', alignItems: 'center', paddingLeft: 2 },
+  durationText: { color: '#ffffff', fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  meta: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 2 },
+  name: { color: colors.text, fontSize: 15, lineHeight: 20, fontWeight: '600', letterSpacing: -0.2 },
+  date: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
+  more: { paddingTop: 2, paddingLeft: space[2] },
 });

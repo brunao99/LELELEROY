@@ -221,7 +221,7 @@ export default function ExportScreen() {
           </Txt>
           <ProgressBar fraction={stage.kind === 'rendering' ? stage.fraction : stage.kind === 'preparing' ? stage.fraction : null} />
           <Txt variant="sm" tone="muted" align="center">
-            Mantenha o Bobina aberto até terminar. Sair do app interrompe a exportação.
+            {"Mantenha o Ledit's aberto até terminar. Sair do app interrompe a exportação."}
           </Txt>
           {stage.kind !== 'saving' ? <Button label="Cancelar" variant="secondary" onPress={() => abort.current?.abort()} /> : null}
         </View>

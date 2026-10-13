@@ -55,7 +55,7 @@ export function crashReport(crash: CrashInfo): string {
   const constants = Platform.constants as Record<string, unknown>;
   const device = [constants.Manufacturer, constants.Model].filter(Boolean).join(' ');
   return [
-    `Bobina — ${crash.kind === 'previous' ? 'fechou na abertura anterior' : 'erro'}`,
+    `Ledit's — ${crash.kind === 'previous' ? 'fechou na abertura anterior' : 'erro'}`,
     `Aparelho: ${device || 'desconhecido'} · ${Platform.OS} ${String(constants.Release ?? Platform.Version)}`,
     '',
     crash.message,

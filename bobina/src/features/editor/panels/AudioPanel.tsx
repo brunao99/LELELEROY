@@ -97,7 +97,7 @@ function VoiceoverRecorder({ project, onClose }: { project: Project; onClose: ()
   const start = async () => {
     const permission = await requestRecordingPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Microfone bloqueado', 'Para gravar a narração, libere o microfone para o Bobina nas configurações do aparelho.', [
+      Alert.alert('Microfone bloqueado', "Para gravar a narração, libere o microfone para o Ledit's nas configurações do aparelho.", [
         { text: 'Agora não', style: 'cancel' },
         { text: 'Abrir configurações', onPress: () => Linking.openSettings() },
       ]);

@@ -1,4 +1,9 @@
-# Marca: Bobina
+# Marca: Ledit's
+
+Em 2026-10-13 o nome mudou de Bobina para **Ledit's**, escolha do dono do projeto.
+O identificador interno continua `com.brunao99.bobina` (trocar faria o Android
+tratar como outro app e apagaria os projetos ao reinstalar). As checagens de marca
+abaixo valem para o nome novo e continuam "a rodar".
 
 Projeto pessoal. A marca existe para o app ter identidade própria e não
 confundir com o CapCut, não para vender. Se um dia virar produto, rode as

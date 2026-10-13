@@ -93,7 +93,7 @@ function CrashScreen({ crash, onDismiss }: { crash: CrashInfo; onDismiss: () => 
   return (
     <View style={styles.root}>
       <Text style={styles.title} accessibilityRole="header">
-        {previous ? 'O Bobina fechou da última vez' : 'O Bobina encontrou um erro'}
+        {previous ? "O Ledit's fechou da última vez" : "O Ledit's encontrou um erro"}
       </Text>
       <Text style={styles.text}>
         Toque em Compartilhar erro e mande o texto para quem está corrigindo o app. Ele diz exatamente onde o problema

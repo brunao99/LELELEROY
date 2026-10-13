@@ -1,7 +1,8 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Clapperboard, Plus, Settings } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Alert, FlatList, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { createProject, defaultProjectName } from '@/core/defaults';
@@ -17,10 +18,10 @@ import {
   saveProject,
   type ProjectSummary,
 } from '@/storage/projects';
-import { Button, IconButton } from '@/ui/Button';
+import { IconButton } from '@/ui/Button';
 import { PromptDialog, ProgressDialog } from '@/ui/Dialogs';
-import { EmptyState, Toast, type ToastMessage } from '@/ui/Feedback';
-import { Txt } from '@/ui/Text';
+import { Toast, type ToastMessage } from '@/ui/Feedback';
+import { PressableScale } from '@/ui/PressableScale';
 import { colors, space } from '@/ui/theme';
 
 let toastSeq = 0;
@@ -113,34 +114,59 @@ export default function Home() {
     }
   };
 
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.set(e.contentOffset.y);
+  });
+  // O título grande sobe com a lista; quando some, o título pequeno aparece na barra.
+  const barTitle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.get(), [28, 48], [0, 1], Extrapolation.CLAMP),
+  }));
+  const barEdge = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.get(), [40, 64], [0, 1], Extrapolation.CLAMP),
+  }));
+
+  const footer = insets.bottom + space[4];
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Txt variant="xl" accessibilityRole="header">
-          Bobina
-        </Txt>
-        <IconButton icon={Settings} label="Configurações" onPress={() => router.push('/settings')} />
+      <View style={styles.bar}>
+        <Animated.Text style={[styles.barTitle, barTitle]} accessibilityElementsHidden importantForAccessibility="no">
+          Projetos
+        </Animated.Text>
+        <View style={styles.barRight}>
+          <IconButton icon={Settings} label="Configurações" onPress={() => router.push('/settings')} />
+        </View>
+        <Animated.View style={[styles.barEdge, barEdge]} />
       </View>
 
-      <Button label="Novo projeto" icon={Plus} size="lg" onPress={create} style={styles.newButton} accessibilityHint="Escolha vídeos e fotos para começar" />
-
-      {projects === null ? null : projects.length === 0 ? (
-        <EmptyState
-          icon={Clapperboard}
-          title="Nenhum projeto ainda"
-          text="Toque em Novo projeto, escolha seus vídeos e fotos na ordem em que devem aparecer e comece a editar."
-        />
-      ) : (
-        <FlatList
+      {projects === null ? null : (
+        <Animated.FlatList
           data={projects}
           keyExtractor={(p) => p.id}
           numColumns={2}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           columnWrapperStyle={{ gap: space[3] }}
-          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + space[6] }]}
+          contentContainerStyle={[styles.list, { paddingBottom: footer + 52 + space[6] }, projects.length === 0 && { flexGrow: 1 }]}
           ListHeaderComponent={
-            <Txt variant="sm" tone="muted" style={{ marginBottom: space[2] }}>
-              Projetos
-            </Txt>
+            <View style={styles.hero}>
+              <Text style={styles.eyebrow}>{"LEDIT'S"}</Text>
+              <Text style={styles.largeTitle} accessibilityRole="header">
+                Projetos
+              </Text>
+            </View>
+          }
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Clapperboard size={28} color={colors.accent} strokeWidth={1.75} />
+              </View>
+              <Text style={styles.emptyTitle}>Seu primeiro vídeo começa aqui</Text>
+              <Text style={styles.emptyText}>
+                Toque em Novo projeto e escolha os vídeos e fotos na ordem em que devem aparecer.
+              </Text>
+            </View>
           }
           renderItem={({ item }) => (
             <View style={{ flex: 0.5 }}>
@@ -153,6 +179,19 @@ export default function Home() {
           )}
         />
       )}
+
+      <View style={[styles.fabWrap, { bottom: footer }]} pointerEvents="box-none">
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel="Novo projeto"
+          accessibilityHint="Escolha vídeos e fotos para começar"
+          onPress={create}
+          style={styles.fab}
+        >
+          <Plus size={20} color={colors.onAccent} strokeWidth={2.5} />
+          <Text style={styles.fabLabel}>Novo projeto</Text>
+        </PressableScale>
+      </View>
 
       <ProgressDialog
         visible={importing !== null}
@@ -174,14 +213,39 @@ export default function Home() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  header: {
+  bar: { height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  barTitle: { color: colors.text, fontSize: 17, fontWeight: '600', letterSpacing: -0.4 },
+  barRight: { position: 'absolute', right: space[2], top: 0, bottom: 0, justifyContent: 'center' },
+  barEdge: { position: 'absolute', left: 0, right: 0, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+  list: { paddingHorizontal: space[4], gap: space[5] },
+  hero: { paddingTop: space[1], paddingBottom: space[2], gap: 2 },
+  eyebrow: { color: colors.accent, fontSize: 12, fontWeight: '700', letterSpacing: 1.6 },
+  largeTitle: { color: colors.text, fontSize: 34, lineHeight: 41, fontWeight: '700', letterSpacing: -0.6 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space[6], gap: space[3], paddingBottom: space[8] },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    borderCurve: 'continuous',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space[2],
+  },
+  emptyTitle: { color: colors.text, fontSize: 22, lineHeight: 28, fontWeight: '700', letterSpacing: -0.4, textAlign: 'center' },
+  emptyText: { color: colors.textMuted, fontSize: 15, lineHeight: 22, textAlign: 'center', maxWidth: 300 },
+  fabWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  fab: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingLeft: space[4],
-    paddingRight: space[2],
-    height: 56,
+    gap: space[2],
+    height: 52,
+    paddingHorizontal: space[6],
+    borderRadius: 14,
+    borderCurve: 'continuous',
+    backgroundColor: colors.accent,
   },
-  newButton: { marginHorizontal: space[4], marginBottom: space[5] },
-  list: { paddingHorizontal: space[4], gap: space[4] },
+  fabLabel: { color: colors.onAccent, fontSize: 17, fontWeight: '600', letterSpacing: -0.2 },
 });
