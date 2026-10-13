@@ -61,7 +61,9 @@ interface EditorState {
   playhead: Micros;
   toast: Toast | null;
   busy: Busy | null;
-  open: (project: Project) => void;
+  /** Mídias cujo arquivo não estava no disco ao abrir (os clipes delas ficam pretos). */
+  unavailable: string[];
+  open: (project: Project, unavailable?: string[]) => void;
   close: () => void;
   apply: (fn: (p: Project) => Project, options?: { key?: string }) => void;
   /** Para operações que criam um item: aplica e seleciona o novo item. */
@@ -86,6 +88,7 @@ interface EditorState {
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let bakeTimer: ReturnType<typeof setTimeout> | null = null;
 let bakeRunning = false;
+let bakesPaused = false;
 let toastId = 0;
 
 function scheduleSave(project: Project) {
@@ -111,7 +114,8 @@ export function flushSave() {
 }
 
 function pendingWork(project: Project): { bakes: BakeRequest[]; audio: AudioRenderRequest[] } {
-  const result = buildComposition(project, { resolve: (r) => absolutePath(project.id, r) });
+  const unavailable = new Set(useEditor.getState().unavailable);
+  const result = buildComposition(project, { resolve: (r) => absolutePath(project.id, r), unavailable });
   return { bakes: result.missing, audio: result.missingAudio };
 }
 
@@ -122,7 +126,7 @@ function scheduleBakes() {
 
 /** Faz, uma por vez, as cópias aceleradas e os áudios com fade que faltam. */
 async function runPendingBakes() {
-  if (bakeRunning) return;
+  if (bakeRunning || bakesPaused) return;
   const state = useEditor.getState();
   const project = state.history?.present;
   if (!project) return;
@@ -160,6 +164,24 @@ async function runPendingBakes() {
   }
 }
 
+/**
+ * Para o processamento em segundo plano (a exportação faz o dela, sem disputar o
+ * mesmo arquivo) e espera o que estiver rodando terminar. Devolve a função que
+ * retoma.
+ */
+export async function pauseBackgroundWork(): Promise<() => void> {
+  bakesPaused = true;
+  if (bakeTimer) {
+    clearTimeout(bakeTimer);
+    bakeTimer = null;
+  }
+  while (bakeRunning) await new Promise((resolve) => setTimeout(resolve, 100));
+  return () => {
+    bakesPaused = false;
+    if (useEditor.getState().history) scheduleBakes();
+  };
+}
+
 /** As cópias aceleradas são cache: desfazer não deve jogá-las fora. */
 function keepBakes(next: History, from: Project): History {
   if (next.present.bakes === from.bakes && next.present.audioRenders === from.audioRenders) return next;
@@ -181,16 +203,17 @@ export const useEditor = create<EditorState>((set, get) => ({
   playhead: 0,
   toast: null,
   busy: null,
+  unavailable: [],
 
-  open: (project) => {
-    set({ history: initHistory(project), selection: null, panel: null, panelTarget: null, playhead: 0, busy: null });
+  open: (project, unavailable = []) => {
+    set({ history: initHistory(project), selection: null, panel: null, panelTarget: null, playhead: 0, busy: null, unavailable });
     scheduleBakes();
   },
 
   close: () => {
     flushSave();
     if (bakeTimer) clearTimeout(bakeTimer);
-    set({ history: null, selection: null, panel: null, panelTarget: null, busy: null });
+    set({ history: null, selection: null, panel: null, panelTarget: null, busy: null, unavailable: [] });
   },
 
   apply: (fn, options) => {

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { buildComposition } from '@/core/composition';
 import { makeMainClip } from '@/core/defaults';
+import { countUnavailable } from '@/core/files';
 import { addAssets, insertMainClips } from '@/core/ops';
 import { buildRenderPlan, type RenderPlan } from '@/core/renderPlan';
 import { insertIndexAt } from '@/core/timeline';
@@ -27,11 +28,11 @@ import { Timeline } from '@/features/editor/timeline/Timeline';
 import { importAll, pickVisualMedia } from '@/features/media/pick';
 import { flushSave, useEditor, useProject } from '@/state/editor';
 import { absolutePath } from '@/storage/paths';
-import { loadProject } from '@/storage/projects';
+import { checkProjectFiles, loadProject, saveProject } from '@/storage/projects';
 import { Button, IconButton } from '@/ui/Button';
 import { EmptyState, Toast } from '@/ui/Feedback';
 import { Txt } from '@/ui/Text';
-import { colors, space } from '@/ui/theme';
+import { colors, radius, space } from '@/ui/theme';
 
 /**
  * Reduz os vídeos do preview só no iOS. No Android o motor entrega o quadro já em
@@ -49,8 +50,12 @@ export default function EditorScreen() {
   useEffect(() => {
     let cancelled = false;
     loadProject(id)
-      .then((p) => {
-        if (!cancelled) open(p);
+      .then((loaded) => {
+        if (cancelled) return;
+        // Caches apagados são refeitos; mídias que sumiram ficam marcadas.
+        const { project: p, missingAssets } = checkProjectFiles(loaded, { prune: true });
+        if (p !== loaded) saveProject(p);
+        open(p, missingAssets);
       })
       .catch((e) => !cancelled && setError(String(e?.message ?? e)));
     return () => {
@@ -98,12 +103,17 @@ function EditorBody({ project }: { project: Project }) {
   const apply = useEditor((s) => s.apply);
   const setBusy = useEditor((s) => s.setBusy);
   const showToast = useEditor((s) => s.showToast);
+  const unavailableIds = useEditor((s) => s.unavailable);
+  const unavailable = useMemo(() => new Set(unavailableIds), [unavailableIds]);
+  const missingCount = countUnavailable(project, unavailable);
   const provider = useFonts(FONT_SOURCES);
 
   const plan = useMemo(() => buildRenderPlan(project), [project]);
   const composition = useMemo(
-    () => buildComposition(project, { resolve: (r) => absolutePath(project.id, r), previewMaxSide: PREVIEW_MAX_SIDE }).composition,
-    [project],
+    () =>
+      buildComposition(project, { resolve: (r) => absolutePath(project.id, r), previewMaxSide: PREVIEW_MAX_SIDE, unavailable })
+        .composition,
+    [project, unavailable],
   );
   const resources = useDrawResources(project, plan, provider);
   const planSV = useSharedValue<RenderPlan | null>(null);
@@ -200,6 +210,15 @@ function EditorBody({ project }: { project: Project }) {
           />
         </View>
 
+        {missingCount > 0 ? (
+          <View style={styles.missing} accessibilityRole="alert">
+            <AlertTriangle size={16} color={colors.danger} />
+            <Txt variant="xs" style={{ flex: 1 }}>
+              {missingCount === 1 ? '1 item está sem a mídia original' : `${missingCount} itens estão sem a mídia original`}. Eles
+              aparecem em preto: toque no clipe marcado e use Substituir.
+            </Txt>
+          </View>
+        ) : null}
         <Preview project={project} plan={plan} resources={resources} player={player} size={size} onSize={setSize} />
         <PlaybackBar player={player} durationUs={plan.duration} />
 
@@ -230,4 +249,15 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   topBar: { height: 48, flexDirection: 'row', alignItems: 'center', paddingLeft: space[1] },
   emptyHint: { position: 'absolute', top: '40%', left: 0, right: 0, alignItems: 'center' },
+  missing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
+    marginHorizontal: space[3],
+    marginBottom: space[1],
+    paddingHorizontal: space[3],
+    paddingVertical: space[2],
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
 });

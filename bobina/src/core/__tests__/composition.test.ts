@@ -230,3 +230,20 @@ describe('volume acima de 100%', () => {
     expect(items).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'audio', path: '/data/p1/rendered/g.wav', volume: 1 })]));
   });
 });
+
+describe('mídia ausente', () => {
+  it('deixa de fora os clipes da mídia que sumiu, sem pedir cópia nem áudio', () => {
+    let p = projectWith(3, 4);
+    const music = audioAsset(30);
+    p = addAudio(p, music, 0, 'import', 'Música').project;
+    p = setSpeed(p, p.main[1]!.id, 2, false);
+    p = setFades(p, p.audios[0]!.id, sec(1), 0);
+    const gone = new Set([p.main[1]!.assetId, music.id]);
+    const { composition, missing, missingAudio } = buildComposition(p, { resolve, unavailable: gone });
+    expect(composition!.items.map((i) => i.id)).toEqual([p.main[0]!.id]);
+    expect(missing).toEqual([]);
+    expect(missingAudio).toEqual([]);
+    // A duração não muda: o trecho fica preto e mudo.
+    expect(composition!.duration).toBe(buildComposition(p, { resolve }).composition!.duration);
+  });
+});

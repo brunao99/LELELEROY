@@ -76,6 +76,8 @@ export interface CompositionOptions {
   resolve: (relative: string) => string;
   /** No preview, reduz os vídeos para no máximo este lado (poupa o decodificador). */
   previewMaxSide?: number;
+  /** Mídias cujo arquivo sumiu: os clipes delas ficam de fora (preto e mudo). */
+  unavailable?: ReadonlySet<string>;
 }
 
 const US = 1_000_000;
@@ -154,6 +156,7 @@ interface Collect {
   items: CompositionItem[];
   missing: BakeRequest[];
   missingAudio: AudioRenderRequest[];
+  unavailable: ReadonlySet<string>;
 }
 
 /**
@@ -195,7 +198,7 @@ function addRenderedAudio(c: Collect, clip: AudioClipLike & { id: string }, star
 function addVisual(c: Collect, clip: MainClip | OverlayClip, start: Micros, audible: boolean, previewMaxSide?: number) {
   const { project, total, resolve, items, missing } = c;
   const asset = project.assets[clip.assetId];
-  if (!asset || asset.kind !== 'video') return;
+  if (!asset || asset.kind !== 'video' || c.unavailable.has(asset.id)) return;
   const duration = clipDuration(clip);
   const end = Math.min(start + duration, total);
   if (end <= start) return;
@@ -274,7 +277,7 @@ function addVisual(c: Collect, clip: MainClip | OverlayClip, start: Micros, audi
 function addAudioItem(c: Collect, clip: AudioClip) {
   const { project, total, resolve, items, missing } = c;
   const asset = project.assets[clip.assetId];
-  if (!asset || !isAudible(clip.volume, asset)) return;
+  if (!asset || c.unavailable.has(asset.id) || !isAudible(clip.volume, asset)) return;
   const end = Math.min(clip.start + clipDuration(clip), total);
   if (end <= clip.start) return;
   if (needsAudioRender(clip) && addRenderedAudio(c, clip, clip.start, end, clip.id)) return;
@@ -318,7 +321,15 @@ function addAudioItem(c: Collect, clip: AudioClip) {
 
 export function buildComposition(project: Project, options: CompositionOptions): CompositionResult {
   const total = projectDuration(project);
-  const c: Collect = { project, total, resolve: options.resolve, items: [], missing: [], missingAudio: [] };
+  const c: Collect = {
+    project,
+    total,
+    resolve: options.resolve,
+    items: [],
+    missing: [],
+    missingAudio: [],
+    unavailable: options.unavailable ?? new Set(),
+  };
   if (total <= 0) return { composition: null, missing: [], missingAudio: [] };
   for (const slot of layoutMain(project)) {
     const asset = project.assets[slot.clip.assetId];

@@ -4,7 +4,7 @@
  * (reordenar na faixa principal, trocar de tempo e camada nas outras).
  */
 import * as Haptics from 'expo-haptics';
-import { Plus, Volume2, VolumeX } from 'lucide-react-native';
+import { AlertTriangle, Plus, Volume2, VolumeX } from 'lucide-react-native';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector, ScrollView as GHScrollView } from 'react-native-gesture-handler';
@@ -61,6 +61,8 @@ export function Timeline({ project, player, onAddMedia, onOpenTransition }: Time
   const applyGesture = useEditor((s) => s.applyGesture);
   const endGesture = useEditor((s) => s.endGesture);
   const setPlayhead = useEditor((s) => s.setPlayhead);
+  const unavailableIds = useEditor((s) => s.unavailable);
+  const unavailable = useMemo(() => new Set(unavailableIds), [unavailableIds]);
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const userScroll = useSharedValue(false);
@@ -142,6 +144,7 @@ export function Timeline({ project, player, onAddMedia, onOpenTransition }: Time
     applyGesture,
     endGesture,
     playheadUs,
+    unavailable,
   };
 
   return (
@@ -224,6 +227,8 @@ interface RowContext {
   applyGesture: ReturnType<typeof useEditor.getState>['applyGesture'];
   endGesture: () => void;
   playheadUs: () => Micros;
+  /** Mídias que faltam no disco: os clipes delas aparecem marcados. */
+  unavailable: ReadonlySet<string>;
 }
 
 /** Ímã: aproxima `t` do alvo mais perto se estiver a menos de SNAP_PX. */
@@ -379,6 +384,7 @@ function MainClipView({ ctx, slot, slots }: { ctx: RowContext; slot: MainSlot; s
   const clip = slot.clip;
   const asset = project.assets[clip.assetId];
   const selected = selection?.kind === 'main' && selection.id === clip.id;
+  const lost = ctx.unavailable.has(clip.assetId);
   const visibleEnd = slot.index === slots.length - 1 ? slot.end : slot.coreEnd;
   const left = pad + toPx(slot.start, pps);
   const width = Math.max(4, toPx(visibleEnd - slot.start, pps) - 2);
@@ -423,7 +429,7 @@ function MainClipView({ ctx, slot, slots }: { ctx: RowContext; slot: MainSlot; s
       <View
         accessible
         accessibilityRole="button"
-        accessibilityLabel={`Clipe ${slot.index + 1}, ${formatSeconds(slot.duration)}${clip.speed !== 1 ? `, velocidade ${formatSpeed(clip.speed)}` : ''}`}
+        accessibilityLabel={`Clipe ${slot.index + 1}, ${formatSeconds(slot.duration)}${clip.speed !== 1 ? `, velocidade ${formatSpeed(clip.speed)}` : ''}${lost ? ', mídia ausente' : ''}`}
         accessibilityState={{ selected }}
         style={[
           styles.clip,
@@ -432,10 +438,12 @@ function MainClipView({ ctx, slot, slots }: { ctx: RowContext; slot: MainSlot; s
           dragging ? { opacity: 0.8, transform: [{ scale: 1.04 }] } : null,
         ]}
       >
-        {asset ? (
+        {asset && !lost ? (
           <Filmstrip projectId={project.id} asset={asset} sourceIn={clip.sourceIn} speed={clip.speed} width={width} height={height} pps={pps} />
         ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.danger }]} />
+          <View style={[StyleSheet.absoluteFill, styles.lost]}>
+            <AlertTriangle size={18} color={colors.danger} />
+          </View>
         )}
         {clip.speed !== 1 ? (
           <View style={styles.badge}>
@@ -537,26 +545,28 @@ function ItemView({ ctx, kind, item }: { ctx: RowContext; kind: RowKind; item: R
 
   const audio = kind === 'audio' ? (item as AudioClip) : null;
   const audioAsset = audio ? project.assets[audio.assetId] : undefined;
+  const lost = (kind === 'audio' || kind === 'overlay') && ctx.unavailable.has((item as AudioClip | OverlayClip).assetId);
 
   return (
     <GestureDetector gesture={Gesture.Exclusive(drag, tap)}>
       <View
         accessible
         accessibilityRole="button"
-        accessibilityLabel={`${kind === 'text' ? 'Texto' : kind === 'caption' ? 'Legenda' : kind === 'audio' ? 'Áudio' : 'Sobreposição'}: ${itemLabel(kind, item, project)}, ${formatSeconds(end - start)}`}
+        accessibilityLabel={`${kind === 'text' ? 'Texto' : kind === 'caption' ? 'Legenda' : kind === 'audio' ? 'Áudio' : 'Sobreposição'}: ${itemLabel(kind, item, project)}, ${formatSeconds(end - start)}${lost ? ', mídia ausente' : ''}`}
         accessibilityState={{ selected }}
         style={[
           styles.item,
           { left, width, height, backgroundColor: kind === 'audio' ? `${color}55` : color, zIndex: selected || dragging ? 2 : 1 },
+          lost ? styles.lost : null,
           selected ? styles.clipSelected : null,
           dragging ? { opacity: 0.85 } : null,
         ]}
       >
-        {audio && audioAsset ? (
+        {audio && audioAsset && !lost ? (
           <Waveform projectId={project.id} asset={audioAsset} sourceIn={audio.sourceIn} sourceOut={audio.sourceOut} width={width} height={height} color={color} />
         ) : null}
-        <Txt variant="xs" weight="600" numberOfLines={1} style={{ color: kind === 'audio' ? colors.text : colors.onTrack, paddingHorizontal: 6 }}>
-          {itemLabel(kind, item, project)}
+        <Txt variant="xs" weight="600" numberOfLines={1} style={{ color: kind === 'audio' || lost ? colors.text : colors.onTrack, paddingHorizontal: 6 }}>
+          {lost ? 'Mídia ausente' : itemLabel(kind, item, project)}
         </Txt>
         {selected ? (
           <>
@@ -591,6 +601,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceRaised,
   },
   clipSelected: { borderWidth: 2, borderColor: colors.accent },
+  lost: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   item: {
     position: 'absolute',
     top: 0,

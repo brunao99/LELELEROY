@@ -87,10 +87,12 @@ export interface PreviewProps {
 const SNAP = 0.015;
 
 /** Estado do gesto de transformação em andamento (só um por vez). */
-const live = { dx: 0, dy: 0, scale: 1, rotation: 0, snapped: false, active: 0 };
+const live = { dx: 0, dy: 0, scale: 1, rotation: 0, snapped: false, centerX: false, centerY: false, active: 0 };
 
 function liveBegin() {
-  if (live.active === 0) Object.assign(live, { dx: 0, dy: 0, scale: 1, rotation: 0, snapped: false });
+  if (live.active === 0) {
+    Object.assign(live, { dx: 0, dy: 0, scale: 1, rotation: 0, snapped: false, centerX: false, centerY: false });
+  }
   live.active += 1;
 }
 
@@ -104,10 +106,16 @@ function liveSet(patch: Partial<Pick<typeof live, 'dx' | 'dy' | 'scale' | 'rotat
   Object.assign(live, patch);
 }
 
-/** Avisa (vibração) só na hora em que encaixa. */
-function liveSnap(snapped: boolean) {
+/** Avisa (vibração) só na hora em que encaixa e guarda em que eixo está no centro. */
+function liveSnap(centerX: boolean, centerY: boolean) {
+  const snapped = centerX || centerY;
   if (snapped && !live.snapped) Haptics.selectionAsync().catch(() => {});
-  live.snapped = snapped;
+  Object.assign(live, { snapped, centerX, centerY });
+}
+
+interface Guides {
+  vertical: boolean;
+  horizontal: boolean;
 }
 
 export function Preview({ project, plan, resources, player, onSize, size }: PreviewProps) {
@@ -117,6 +125,8 @@ export function Preview({ project, plan, resources, player, onSize, size }: Prev
   const select = useEditor((s) => s.select);
   const endGesture = useEditor((s) => s.endGesture);
   const [area, setArea] = useState({ width: 0, height: 0 });
+  // Linhas de centro enquanto o item arrastado está encaixado no meio.
+  const [guides, setGuides] = useState<Guides | null>(null);
 
   const aspect = plan.width / plan.height;
   const fit = area.width > 0 ? fitInside(aspect, area) : { width: 0, height: 0 };
@@ -153,13 +163,21 @@ export function Preview({ project, plan, resources, player, onSize, size }: Prev
       // Ímã no centro, com uma vibração leve ao encaixar.
       if (Math.abs(next.x) < SNAP) next.x = 0;
       if (Math.abs(next.y) < SNAP) next.y = 0;
-      liveSnap(next.x === 0 || next.y === 0);
+      liveSnap(next.x === 0, next.y === 0);
       return updateTransform(base, id, next);
     });
+    const vertical = live.centerX;
+    const horizontal = live.centerY;
+    setGuides((g) =>
+      !vertical && !horizontal ? null : g && g.vertical === vertical && g.horizontal === horizontal ? g : { vertical, horizontal },
+    );
   };
   const begin = liveBegin;
   const finish = () => {
-    if (liveFinish()) endGesture();
+    if (liveFinish()) {
+      setGuides(null);
+      endGesture();
+    }
   };
 
   const pan = Gesture.Pan()
@@ -215,6 +233,8 @@ export function Preview({ project, plan, resources, player, onSize, size }: Prev
             <Canvas style={{ width: fit.width, height: fit.height }}>
               <Image image={player.frame} x={0} y={0} width={fit.width} height={fit.height} fit="fill" />
             </Canvas>
+            {guides?.vertical ? <View pointerEvents="none" style={[styles.guideV, { left: fit.width / 2 - 0.5 }]} /> : null}
+            {guides?.horizontal ? <View pointerEvents="none" style={[styles.guideH, { top: fit.height / 2 - 0.5 }]} /> : null}
             {box ? (
               <View
                 pointerEvents="none"
@@ -242,5 +262,7 @@ export function Preview({ project, plan, resources, player, onSize, size }: Prev
 const styles = StyleSheet.create({
   area: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
   box: { position: 'absolute', borderWidth: 1.5, borderColor: colors.accent, borderRadius: 2 },
+  guideV: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: colors.accent, opacity: 0.8 },
+  guideH: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: colors.accent, opacity: 0.8 },
   loading: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent },
 });

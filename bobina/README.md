@@ -53,7 +53,7 @@ Precisa de um Mac com Xcode (`npx expo run:ios`) ou do EAS Build
 ```bash
 npm install
 npx expo run:android      # build de desenvolvimento + Metro
-npm test                  # 118 testes do núcleo e do estado
+npm test                  # 129 testes do núcleo e do estado
 npm run typecheck         # tsc --noEmit
 npm run lint              # ESLint (Expo)
 ```

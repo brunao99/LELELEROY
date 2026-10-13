@@ -77,14 +77,48 @@ confirmar no celular está em "A verificar".
 - Real: o quadro na thread de UI podia usar um decodificador já liberado
 - Status: corrigido (troca e liberação na própria thread de UI)
 
+### BUG-011: limpar os caches quebrava projetos com velocidade ou fade
+
+- Severidade: S2
+- Fluxo: F17 (configurações) depois F01 (abrir e exportar)
+- Passos: aplicar 2x num clipe, esperar o processamento, ir em Configurações > Limpar caches, abrir o projeto
+- Esperado: o editor refaz as cópias, como o aviso promete
+- Real: o projeto ainda apontava para `baked/` e `rendered/`, que tinham sido apagadas; a prévia e a exportação tentariam abrir arquivos inexistentes
+- Evidência: `clearCaches()` em `settings.tsx` apaga as pastas; `pruneBakes`/`bakeFileExists` existiam mas ninguém chamava
+- Status: corrigido (ao abrir, `reconcileFiles` esquece o que sumiu e o editor refaz; 3 testes)
+
+### BUG-012: cópias aceleradas e áudios processados nunca eram apagados
+
+- Severidade: S3
+- Passos: trocar a velocidade de um clipe várias vezes
+- Real: cada velocidade deixava um MP4 em `baked/` para sempre
+- Status: corrigido (ao abrir o editor, `unusedCaches` apaga o que nenhum clipe usa; 2 testes)
+
+### BUG-013: exportar durante o processamento gravava o mesmo arquivo duas vezes
+
+- Severidade: S2
+- Fluxo: F01 (exportar)
+- Passos: mudar a velocidade de um clipe e tocar em Exportar antes de terminar "Aplicando velocidade"
+- Esperado: um processamento só
+- Real: o editor (por baixo) e a exportação processavam a mesma cópia ao mesmo tempo, no mesmo arquivo; um podia apagar o arquivo do outro no meio e a exportação usar um vídeo pela metade
+- Status: corrigido (a exportação pausa o editor, espera o que está rodando e aproveita o resultado; 3 testes)
+
+### BUG-014: a resolução escolhida na exportação voltava ao valor antigo
+
+- Severidade: S3
+- Passos: em Exportar, trocar 1080p por 720p, voltar ao editor, editar algo, abrir Exportar de novo
+- Real: o salvamento automático do editor gravava por cima a configuração antiga
+- Status: corrigido (a escolha também vai para o projeto aberto no editor)
+
 ## A verificar no aparelho
 
 - Desempenho do preview com 3+ vídeos 1080p ao mesmo tempo (transição + sobreposição).
-- Vídeos HDR (iPhone, Pixel): sem mapeamento de tom, podem sair lavados.
+- Vídeos HDR (iPhone, Pixel, Samsung com HDR10+): o motor entrega o quadro sem conversão de cor (Android: MediaCodec direto numa textura; iOS: AVAssetReader em BGRA sem `AVVideoColorPropertiesKey`). Devem sair lavados. Teste: gravar 5 s em HDR, importar e comparar com a galeria.
+- Mídia ausente: apagar um arquivo de `media/` de um projeto (só dá com acesso à pasta do app) e conferir aviso, clipe marcado e Substituir.
 - Exportação 2K/4K em aparelhos médios.
 - Legendas: tempo de transcrição com o modelo padrão num vídeo de 1 minuto.
 - Projeto só com fotos: o relógio próprio do preview (sem vídeo para dar o tempo).
 - Gestos da timeline dentro da rolagem (alças × rolar) no Android e no iOS.
 - iOS inteiro: este ambiente não compila iOS (precisa de Mac ou EAS Build).
 
-Resumo: 10 bugs, 0 abertos (S1: 2, S2: 6, S3: 2, todos corrigidos).
+Resumo: 14 bugs, 0 abertos (S1: 2, S2: 8, S3: 4, todos corrigidos). BUG-011 a 014 apareceram na revisão final do código.

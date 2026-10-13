@@ -5,11 +5,12 @@
 import { Directory, File } from 'expo-file-system';
 
 import { SCHEMA_VERSION } from '@/core/defaults';
+import { reconcileFiles, unusedCaches, type FileCheck } from '@/core/files';
 import { newId } from '@/core/ids';
 import { projectDuration } from '@/core/timeline';
 import type { Project, Ratio } from '@/core/types';
 
-import { ensureDir, projectDir, projectsRoot } from './paths';
+import { ensureDir, projectDir, projectFile, projectsRoot } from './paths';
 
 export interface ProjectSummary {
   id: string;
@@ -75,6 +76,26 @@ export async function loadProject(id: string): Promise<Project> {
   const file = new File(projectDir(id), 'project.json');
   if (!file.exists) throw new ProjectFormatError('O projeto não foi encontrado.');
   return migrate(JSON.parse(await file.text()));
+}
+
+/**
+ * Confere os arquivos do projeto no disco (ver `reconcileFiles`). Com `prune`,
+ * também apaga as cópias e os áudios processados que nenhum clipe usa: só ao
+ * abrir o editor, quando ainda não há histórico de desfazer que precise deles.
+ */
+export function checkProjectFiles(project: Project, options: { prune: boolean }): FileCheck {
+  const checked = reconcileFiles(project, (relative) => projectFile(project.id, relative).exists);
+  if (!options.prune) return checked;
+  const unused = unusedCaches(checked.project);
+  for (const relative of unused.files) {
+    try {
+      const file = projectFile(project.id, relative);
+      if (file.exists) file.delete();
+    } catch {
+      // Fica para a próxima limpeza de caches.
+    }
+  }
+  return { ...checked, project: unused.project };
 }
 
 export async function listProjects(): Promise<ProjectSummary[]> {

@@ -9,7 +9,7 @@ import { Directory } from 'expo-file-system';
 import { createSynchronizable, createWorkletRuntime, runOnRuntime, scheduleOnRN, type WorkletRuntime } from 'react-native-worklets';
 
 import { applyFades, applyGain, changeSpeed, encodeWav, sliceSeconds } from '@/core/audio';
-import { bakeKey, type AudioRenderRequest, type BakeRequest } from '@/core/composition';
+import type { AudioRenderRequest, BakeRequest } from '@/core/composition';
 import { displaySize } from '@/core/geometry';
 import type { AudioRender, Bake, MediaAsset, Project } from '@/core/types';
 import { absolutePath, ensureDir, fileUri, projectDir, projectFile } from '@/storage/paths';
@@ -203,31 +203,6 @@ export async function runBake(
   };
 }
 
-/** Apaga as cópias aceleradas que nenhum clipe usa mais. */
-export function pruneBakes(project: Project): Project {
-  const used = new Set<string>();
-  for (const c of [...project.main, ...project.overlays, ...project.audios]) {
-    if (c.speed !== 1) used.add(bakeKey(c.assetId, c.speed, c.keepPitch));
-  }
-  const bakes = { ...project.bakes };
-  let changed = false;
-  for (const [key, bake] of Object.entries(project.bakes)) {
-    if (used.has(key)) continue;
-    for (const relative of [bake.videoFile, bake.audioFile]) {
-      if (!relative) continue;
-      const file = projectFile(project.id, relative);
-      if (file.exists) file.delete();
-    }
-    delete bakes[key];
-    changed = true;
-  }
-  return changed ? { ...project, bakes } : project;
-}
-
-export function bakeFileExists(project: Project, bake: Bake): boolean {
-  return [bake.videoFile, bake.audioFile].every((relative) => !relative || projectFile(project.id, relative).exists);
-}
-
 /** Nome de arquivo curto e estável a partir da chave (djb2). */
 function shortHash(text: string): string {
   let h = 5381;
@@ -254,18 +229,4 @@ export async function runAudioRender(project: Project, request: AudioRenderReque
   file.create();
   file.write(encodeWav(timed));
   return { key: request.key, file: relative };
-}
-
-/** Apaga os áudios processados que nenhum clipe usa mais. */
-export function pruneAudioRenders(project: Project, usedKeys: Set<string>): Project {
-  let changed = false;
-  const renders = { ...project.audioRenders };
-  for (const [key, render] of Object.entries(project.audioRenders)) {
-    if (usedKeys.has(key)) continue;
-    const file = projectFile(project.id, render.file);
-    if (file.exists) file.delete();
-    delete renders[key];
-    changed = true;
-  }
-  return changed ? { ...project, audioRenders: renders } : project;
 }

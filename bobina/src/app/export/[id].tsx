@@ -14,6 +14,7 @@ import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { buildComposition } from '@/core/composition';
+import { countUnavailable } from '@/core/files';
 import { exportBitRate, exportSize } from '@/core/geometry';
 import { setExportSettings } from '@/core/ops';
 import { buildRenderPlan } from '@/core/renderPlan';
@@ -25,7 +26,8 @@ import { FONT_SOURCES } from '@/engine/fonts';
 import { buildAllText, imageAssetIds, loadImages } from '@/engine/resources';
 import { gradeEffect } from '@/engine/shaders';
 import { absolutePath, ensureDir, exportsDir, toPlainPath } from '@/storage/paths';
-import { loadProject, saveProject } from '@/storage/projects';
+import { pauseBackgroundWork, useEditor } from '@/state/editor';
+import { checkProjectFiles, loadProject, saveProject } from '@/storage/projects';
 import { Button, IconButton } from '@/ui/Button';
 import { ChoiceRow } from '@/ui/Chip';
 import { ProgressBar } from '@/ui/Feedback';
@@ -55,12 +57,18 @@ export default function ExportScreen() {
   const insets = useSafeAreaInsets();
   const provider = useFonts(FONT_SOURCES);
   const [project, setProject] = useState<Project | null>(null);
+  const [unavailable, setUnavailable] = useState<ReadonlySet<string>>(() => new Set());
   const [stage, setStage] = useState<Stage>({ kind: 'setup' });
   const abort = useRef<AbortController | null>(null);
 
   useEffect(() => {
     loadProject(id)
-      .then(setProject)
+      .then((loaded) => {
+        // Sem apagar nada: o editor aberto por baixo ainda pode usar esses arquivos.
+        const checked = checkProjectFiles(loaded, { prune: false });
+        setUnavailable(new Set(checked.missingAssets));
+        setProject(checked.project);
+      })
       .catch((e) => setStage({ kind: 'error', message: String(e) }));
   }, [id]);
 
@@ -70,12 +78,15 @@ export default function ExportScreen() {
   const size = useMemo(() => (project ? exportSize(project) : null), [project]);
   const duration = useMemo(() => (project ? buildRenderPlan(project).duration : 0), [project]);
   const megabytes = size && settings ? ((exportBitRate(size, settings.fps) + 192_000) * (duration / 1_000_000)) / 8 / 1_000_000 : 0;
+  const missingCount = project ? countUnavailable(project, unavailable) : 0;
 
   const update = (patch: Partial<Project['exportSettings']>) => {
     if (!project) return;
     const next = setExportSettings(project, patch);
     setProject(next);
     saveProject(next);
+    // O editor continua aberto por baixo e salva por cima: guarda a escolha lá também.
+    useEditor.getState().patchSilently((p) => (p.id === next.id ? setExportSettings(p, patch) : p));
   };
 
   const start = async () => {
@@ -83,11 +94,22 @@ export default function ExportScreen() {
     const controller = new AbortController();
     abort.current = controller;
     await activateKeepAwakeAsync('export').catch(() => {});
+    setStage({ kind: 'preparing', label: 'Preparando', fraction: null });
+    const resume = await pauseBackgroundWork();
     try {
-      // 1. Velocidades e fades que ainda não foram processados.
-      let current = project;
+      // 1. Velocidades e fades que ainda não foram processados (aproveitando o
+      // que o editor terminou depois de abrir esta tela).
+      const live = useEditor.getState().history?.present;
+      let current =
+        live && live.id === project.id
+          ? {
+              ...project,
+              bakes: { ...project.bakes, ...live.bakes },
+              audioRenders: { ...project.audioRenders, ...live.audioRenders },
+            }
+          : project;
       const resolve = (r: string) => absolutePath(current.id, r);
-      let pending = buildComposition(current, { resolve });
+      let pending = buildComposition(current, { resolve, unavailable });
       for (let i = 0; i < pending.missing.length; i++) {
         setStage({ kind: 'preparing', label: 'Aplicando velocidade', fraction: 0 });
         const bake = await runBake(current, pending.missing[i]!, (f) => setStage({ kind: 'preparing', label: 'Aplicando velocidade', fraction: f }), controller.signal);
@@ -98,8 +120,16 @@ export default function ExportScreen() {
         const render = await runAudioRender(current, request);
         current = { ...current, audioRenders: { ...current.audioRenders, [render.key]: render } };
       }
-      if (current !== project) saveProject(current);
-      pending = buildComposition(current, { resolve });
+      if (current !== project) {
+        saveProject(current);
+        const done = current;
+        useEditor.getState().patchSilently((p) =>
+          p.id === done.id
+            ? { ...p, bakes: { ...p.bakes, ...done.bakes }, audioRenders: { ...p.audioRenders, ...done.audioRenders } }
+            : p,
+        );
+      }
+      pending = buildComposition(current, { resolve, unavailable });
       if (controller.signal.aborted) throw new ExportCancelled();
 
       // 2. O que desenhar.
@@ -143,6 +173,7 @@ export default function ExportScreen() {
       if (e instanceof ExportCancelled || controller.signal.aborted) setStage({ kind: 'setup' });
       else setStage({ kind: 'error', message: String(e instanceof Error ? e.message : e) });
     } finally {
+      resume();
       abort.current = null;
       deactivateKeepAwake('export').catch(() => {});
     }
@@ -213,6 +244,12 @@ export default function ExportScreen() {
               <ChoiceRow options={RESOLUTIONS} value={settings.resolution} onChange={(v) => update({ resolution: v })} />
               <SectionLabel>Quadros por segundo</SectionLabel>
               <ChoiceRow options={FPS.map((f) => ({ value: f, label: `${f} fps` }))} value={settings.fps} onChange={(v) => update({ fps: v })} />
+              {missingCount > 0 ? (
+                <Txt variant="sm" tone="danger" style={{ paddingHorizontal: space[4] }}>
+                  {missingCount === 1 ? '1 item está sem a mídia original' : `${missingCount} itens estão sem a mídia original`} e vai
+                  sair em preto e sem som. Volte ao editor para substituir.
+                </Txt>
+              ) : null}
               {settings.resolution >= 1440 ? (
                 <Txt variant="xs" tone="muted" style={{ paddingHorizontal: space[4] }}>
                   2K e 4K dependem do aparelho. Se falhar, tente 1080p.

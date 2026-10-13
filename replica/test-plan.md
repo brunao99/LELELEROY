@@ -6,7 +6,7 @@ Ambiente: Android (arm64) e iOS 15+. Neste ambiente de nuvem não há emulador
 no celular.
 
 Como rodar:
-- Unit: `cd bobina && npm test` (Jest, 118 testes).
+- Unit: `cd bobina && npm test` (Jest, 129 testes).
 - Maestro: instale o app no celular, ligue o celular no computador e rode
   `maestro test bobina/e2e/` (flows em `bobina/e2e/`).
 - Manual: a lista abaixo.
@@ -52,7 +52,10 @@ Como rodar:
 | F15-E1 | | app morto pelo sistema | forçar parada no meio da edição | última edição salva (400 ms) | manual | pendente |
 | F16-H1 | desfazer/refazer | feliz | editar, Desfazer, Refazer | volta e avança; arrasto vira um passo | unit (store) | passou |
 | F17-H1 | gerenciar projetos | feliz | ⋯, Renomear/Duplicar/Excluir | lista atualiza | manual | pendente |
+| F17-E1 | | limpar caches | 2x num clipe, Configurações > Limpar caches, abrir o projeto | o editor refaz a cópia; prévia e exportação normais | unit (files, store) + manual | passou (unit) |
+| F01-E7 | | exportar durante "Aplicando velocidade" | mudar a velocidade e tocar em Exportar na hora | um processamento só; vídeo completo | unit (store) + manual | passou (unit) |
+| F15-E2 | | mídia ausente | arquivo de mídia some da pasta do projeto | aviso no topo, clipe marcado, preto na prévia; Substituir resolve | unit (files, composição) + manual | passou (unit) |
 | A11Y-1 | todos | leitor de tela | TalkBack/VoiceOver nas telas principais | todos os botões têm nome em português | maestro (usa os rótulos) | pendente |
 
-Resumo: 22 casos automatizados aqui, todos passando (118 testes unitários).
+Resumo: 25 casos automatizados aqui, todos passando (129 testes unitários).
 Os demais dependem de um aparelho.

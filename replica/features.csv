@@ -4,7 +4,7 @@ Lista de projetos com miniatura nome duração e data,projetos,must,yes,yes,S01;
 Salvamento automático a cada alteração,projetos,must,yes,yes,F15; gravação atômica 400 ms depois de cada edição
 Reabrir projeto e continuar editando,projetos,must,yes,yes,F15; código pronto e compilado; falta testar num aparelho
 Renomear duplicar e excluir projeto,projetos,should,yes,yes,F17; código pronto e compilado; falta testar num aparelho
-Aviso de mídia ausente com opção de substituir,projetos,should,yes,partial,"comportamento do CapCut a confirmar; o app guarda cópias das mídias, então apagar da galeria não quebra; não há aviso específico"
+Aviso de mídia ausente com opção de substituir,projetos,should,yes,yes,"o app guarda cópias das mídias (apagar da galeria não quebra); ao abrir confere os arquivos: aviso no topo, clipe marcado na timeline, preto na prévia e na exportação; Substituir troca a mídia"
 Selecionar vários vídeos e fotos na ordem escolhida,importação,must,yes,yes,S02; seletor do sistema com seleção em ordem
 Tratar permissão de galeria negada ou parcial,importação,must,yes,yes,Android 14+ e iOS têm acesso parcial; o seletor do sistema não pede permissão de galeria
 Fotos entram com duração padrão editável,importação,must,yes,yes,"duração padrão a confirmar; 3 s, ajustável pelas alças"
@@ -55,7 +55,7 @@ Mover girar e escalar o texto na preview,texto,must,yes,yes,S07; código pronto 
 Ajustar a duração do texto na timeline,texto,must,yes,yes,F06; código pronto e compilado; falta testar num aparelho
 Animação de entrada saída e loop do texto,texto,should,yes,yes,fonte 6; código pronto e compilado; falta testar num aparelho
 Alinhamento e opacidade do texto,texto,should,yes,yes,código pronto e compilado; falta testar num aparelho
-Guias de alinhamento ao centro na preview,texto,should,yes,partial,ímã no centro com vibração; sem linha-guia desenhada
+Guias de alinhamento ao centro na preview,texto,should,yes,yes,ímã no centro com vibração e linhas-guia enquanto encaixado
 Importar fonte do aparelho,texto,could,yes,no,fonte 2
 Modelos e efeitos de texto prontos do CapCut,texto,could,yes,skip,materiais do CapCut (termos seção 9)
 Gerar legendas automáticas pela fala,legendas,must,yes,yes,S15; Whisper no aparelho; modelo baixado uma vez

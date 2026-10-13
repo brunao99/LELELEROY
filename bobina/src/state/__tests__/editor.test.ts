@@ -15,7 +15,11 @@ jest.mock('@/engine/bake', () => ({
 }));
 
 // eslint-disable-next-line import/first
-import { useEditor } from '../editor';
+import { bakeKey } from '@/core/composition';
+// eslint-disable-next-line import/first
+import { runBake } from '@/engine/bake';
+// eslint-disable-next-line import/first
+import { pauseBackgroundWork, useEditor } from '../editor';
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -87,5 +91,75 @@ describe('seleção', () => {
     useEditor.getState().undo();
     expect(useEditor.getState().selection).toBeNull();
     expect(useEditor.getState().panel).toBeNull();
+  });
+});
+
+describe('processamento em segundo plano', () => {
+  const mockedBake = runBake as jest.MockedFunction<typeof runBake>;
+
+  beforeEach(() => {
+    mockedBake.mockReset();
+    mockedBake.mockImplementation(async (project, request) => ({
+      key: request.key,
+      assetId: request.assetId,
+      speed: request.speed,
+      keepPitch: request.keepPitch,
+      from: request.from,
+      to: request.to,
+      videoFile: 'baked/x.mp4',
+      audioFile: 'baked/x.wav',
+    }));
+  });
+
+  it('processa a velocidade nova depois de um tempo', async () => {
+    const id = present().main[0]!.id;
+    useEditor.getState().apply((p) => setSpeed(p, id, 2, false));
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(mockedBake).toHaveBeenCalledTimes(1);
+    expect(present().bakes[bakeKey(present().main[0]!.assetId, 2, false)]?.videoFile).toBe('baked/x.mp4');
+  });
+
+  it('não processa a velocidade de uma mídia ausente', async () => {
+    const p = projectWith(10);
+    useEditor.getState().open(setSpeed(p, p.main[0]!.id, 2, false), [p.main[0]!.assetId]);
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(mockedBake).not.toHaveBeenCalled();
+  });
+
+  it('pausado durante a exportação, não processa; ao retomar, processa', async () => {
+    const resume = await pauseBackgroundWork();
+    const id = present().main[0]!.id;
+    useEditor.getState().apply((p) => setSpeed(p, id, 2, false));
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(mockedBake).not.toHaveBeenCalled();
+    resume();
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(mockedBake).toHaveBeenCalledTimes(1);
+  });
+
+  it('a pausa espera o processamento em andamento terminar', async () => {
+    let finish: () => void = () => {};
+    mockedBake.mockImplementationOnce(
+      (project, request) =>
+        new Promise((resolve) => {
+          finish = () =>
+            resolve({ ...request, from: request.from, to: request.to, videoFile: 'baked/y.mp4', audioFile: 'baked/y.wav' });
+        }),
+    );
+    const id = present().main[0]!.id;
+    useEditor.getState().apply((p) => setSpeed(p, id, 3, false));
+    await jest.advanceTimersByTimeAsync(800);
+    expect(mockedBake).toHaveBeenCalledTimes(1);
+    let paused = false;
+    const pausing = pauseBackgroundWork().then((resume) => {
+      paused = true;
+      return resume;
+    });
+    await jest.advanceTimersByTimeAsync(300);
+    expect(paused).toBe(false);
+    finish();
+    await jest.advanceTimersByTimeAsync(300);
+    expect(paused).toBe(true);
+    (await pausing)();
   });
 });
