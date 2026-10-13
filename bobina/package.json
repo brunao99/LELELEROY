@@ -1,9 +1,10 @@
 {
   "name": "bobina",
   "version": "0.1.0",
-  "main": "expo-router/entry",
+  "main": "index.js",
   "dependencies": {
     "@azzapp/react-native-skia-video": "0.10.1",
+    "@expo/metro-runtime": "~57.0.16",
     "@shopify/react-native-skia": "2.14.0",
     "buffer": "^6.0.3",
     "expo": "~57.0.28",

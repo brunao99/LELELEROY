@@ -52,6 +52,7 @@
         }
       ],
       "expo-sharing",
+      "./plugins/withCrashLog",
       [
         "expo-build-properties",
         {
