@@ -1,0 +1,103 @@
+feature,area,priority,original,clone,notes
+Criar projeto novo a partir da mídia do aparelho,projetos,must,yes,no,S01 S02
+Lista de projetos com miniatura nome duração e data,projetos,must,yes,no,S01
+Salvamento automático a cada alteração,projetos,must,yes,no,F15
+Reabrir projeto e continuar editando,projetos,must,yes,no,F15
+Renomear duplicar e excluir projeto,projetos,should,yes,no,F17
+Aviso de mídia ausente com opção de substituir,projetos,should,yes,no,comportamento do CapCut a confirmar
+Selecionar vários vídeos e fotos na ordem escolhida,importação,must,yes,no,S02
+Tratar permissão de galeria negada ou parcial,importação,must,yes,no,Android 14+ e iOS têm acesso parcial
+Fotos entram com duração padrão editável,importação,must,yes,no,duração padrão a confirmar
+Vídeos HEVC/HDR e vertical com horizontal no mesmo projeto,importação,must,yes,no,
+Pré-visualizar a mídia antes de adicionar,importação,could,yes,no,
+Preview com play/pause e tempo atual/total,editor,must,yes,no,S03
+Timeline com miniaturas e agulha fixa no centro,editor,must,yes,no,S03
+Zoom da timeline com pinça,editor,must,yes,no,S03
+Adicionar mais mídia ao projeto aberto,editor,must,yes,no,botão + da faixa principal
+Reordenar clipes segurando e arrastando,editor,must,yes,no,F04
+Desfazer e refazer,editor,must,yes,no,F16
+Silenciar o áudio original de todos os clipes,editor,should,yes,no,
+Ímã na agulha e nas bordas dos clipes,editor,should,yes,no,
+Preview em tela cheia,editor,could,yes,no,
+Escolher a capa do vídeo,editor,could,yes,no,
+Cortar início e fim arrastando as alças,clipe,must,yes,no,F02
+Dividir o clipe na agulha,clipe,must,yes,no,F03
+Excluir clipe e fechar o espaço,clipe,must,yes,no,F03
+Duplicar clipe,clipe,should,yes,no,
+Girar 90° espelhar e recortar,clipe,should,yes,no,S19
+Mover e escalar o clipe na preview com gestos,clipe,should,yes,no,
+Substituir a mídia do clipe,clipe,could,yes,no,
+Congelar quadro,clipe,could,yes,no,
+Reproduzir ao contrário,clipe,could,yes,no,
+Opacidade do clipe,clipe,could,yes,no,
+Animações de entrada e saída do clipe,clipe,could,yes,no,
+Keyframes de posição escala rotação e opacidade,clipe,could,yes,no,fonte 1 e 2
+Máscaras,clipe,could,yes,no,
+Estabilização,clipe,could,yes,no,difícil: precisa de análise de movimento
+Velocidade constante de 0.1x a 100x,velocidade,must,yes,no,S05
+Manter o tom de voz ao mudar a velocidade,velocidade,should,yes,no,
+Curvas de velocidade,velocidade,could,yes,no,
+Câmera lenta suave por fluxo óptico,velocidade,could,yes,no,difícil
+Importar áudio do próprio aparelho,áudio,must,yes,no,arquivos do usuário; sem biblioteca
+Volume por clipe de vídeo e de áudio,áudio,must,yes,no,S06
+Dividir cortar e mover clipe de áudio,áudio,must,yes,no,S09
+Extrair o áudio de um vídeo,áudio,should,yes,no,F09
+Gravar narração com o microfone,áudio,should,yes,no,F08
+Fade in e fade out,áudio,should,yes,no,S06
+Forma de onda nos clipes de áudio,áudio,should,yes,no,
+Várias faixas de áudio,áudio,should,yes,no,
+Redução de ruído,áudio,could,yes,no,fonte 1
+Marcar batidas da música,áudio,could,yes,no,
+Biblioteca de músicas e efeitos sonoros,áudio,could,yes,skip,conteúdo licenciado do CapCut (termos seção 9) e decisão do usuário
+Adicionar texto com fonte cor e tamanho,texto,must,yes,no,fontes abertas no lugar das deles
+Contorno sombra e fundo do texto,texto,must,yes,no,S07
+Mover girar e escalar o texto na preview,texto,must,yes,no,S07
+Ajustar a duração do texto na timeline,texto,must,yes,no,F06
+Animação de entrada saída e loop do texto,texto,should,yes,no,fonte 6
+Alinhamento e opacidade do texto,texto,should,yes,no,
+Guias de alinhamento ao centro na preview,texto,should,yes,no,
+Importar fonte do aparelho,texto,could,yes,no,fonte 2
+Modelos e efeitos de texto prontos do CapCut,texto,could,yes,skip,materiais do CapCut (termos seção 9)
+Gerar legendas automáticas pela fala,legendas,must,yes,no,S15
+Escolher o idioma da fala,legendas,must,yes,no,S15
+Editar o texto de uma legenda,legendas,must,yes,no,F10
+Aplicar um estilo a todas as legendas,legendas,must,yes,no,S16
+Escolher a origem: áudio do vídeo narração ou ambos,legendas,should,yes,no,fonte 5
+Edição em lote de todas as legendas,legendas,should,yes,no,S16
+Ajustar o tempo de cada legenda na timeline,legendas,should,yes,no,
+Destaque palavra por palavra,legendas,could,yes,no,a confirmar no app
+Filtros com intensidade,filtros,must,yes,no,filtros feitos do zero
+Ajustes de brilho contraste saturação exposição e temperatura,filtros,must,yes,no,S11
+Ajustes de realces sombras nitidez vinheta e matiz,filtros,should,yes,no,S11
+Aplicar filtro ou ajuste a todos os clipes,filtros,should,yes,no,
+Filtro ou ajuste como camada num trecho da timeline,filtros,could,yes,no,
+Roda de cores,filtros,could,yes,no,fonte 1
+Efeitos de vídeo (glitch desfoque etc.),efeitos,could,yes,no,feitos do zero
+Transição entre dois clipes com duração ajustável,transições,must,yes,no,S12
+Conjunto básico: dissolver fade deslizar e zoom,transições,must,yes,no,feitas do zero
+Aplicar a transição a todos os cortes,transições,should,yes,no,
+Proporções 9:16 16:9 1:1 4:3 3:4 e 4:5,formato,must,yes,no,S13
+Fundo com cor desfoque ou imagem,formato,should,yes,no,S14
+Reenquadrar mantendo o assunto,formato,could,yes,no,fonte 1; precisa de detecção automática
+Sobreposição de vídeo ou foto sobre o principal,sobreposição,should,yes,no,S18
+Modos de mistura,sobreposição,could,yes,no,
+Chroma key,sobreposição,could,yes,no,fonte 5
+Exportar MP4 para a galeria,exportação,must,yes,no,S17
+Escolher a resolução (720p 1080p e 2K/4K conforme o aparelho),exportação,must,yes,no,fonte 4
+Progresso e cancelar a exportação,exportação,must,yes,no,S17
+Escolher fps,exportação,should,yes,no,valores a confirmar
+Compartilhar pela folha do sistema após exportar,exportação,should,yes,no,
+Tamanho estimado do arquivo,exportação,could,yes,no,
+Exportação continua em segundo plano,exportação,could,yes,no,a confirmar no CapCut
+Exportar em HDR,exportação,could,yes,no,fonte 2
+Configurações com resolução padrão e limpar cache,configurações,could,yes,no,S20
+Banco de vídeos e fotos para baixar,mídia,could,yes,skip,conteúdo licenciado e decisão do usuário
+Modelos (templates) prontos,modelos,could,yes,skip,conteúdo e rede de criadores do CapCut
+Figurinhas e efeitos da biblioteca do CapCut,efeitos,could,yes,skip,materiais do CapCut (termos seção 9)
+IA generativa: vídeo por texto avatar e dublagem,IA,could,yes,skip,fora do escopo escolhido
+Remover fundo voz por IA e texto para fala,IA,could,yes,skip,fora do escopo escolhido; só legendas automáticas entram
+Conta login e espaço na nuvem,conta,could,yes,skip,projeto pessoal sem servidor
+Compartilhar direto no TikTok,compartilhamento,could,yes,skip,integração de parceiro; usamos a folha do sistema
+Câmera com efeitos e maquiagem,câmera,could,yes,skip,o foco é editar
+Assinatura Pro,pagamentos,could,yes,skip,projeto pessoal
+Clipe final com a marca do CapCut,exportação,could,yes,skip,é a marca deles
