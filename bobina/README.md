@@ -1,8 +1,8 @@
 # Bobina
 
-Editor de vídeo para Android e iOS com os recursos centrais do CapCut, feito do
-zero (nada do código, dos efeitos, das fontes ou das músicas do CapCut).
-Projeto pessoal: sem conta, sem servidor; tudo fica no celular.
+Editor de vídeo para Android e iOS com os recursos centrais dos editores de
+celular, feito do zero (nenhum código, efeito, fonte ou música copiado de
+outro app). Projeto pessoal: sem conta, sem servidor; tudo fica no celular.
 
 ## O que faz
 
