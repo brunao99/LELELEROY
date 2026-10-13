@@ -1,4 +1,4 @@
-# Gera o APK do Bobina (Android, arm64) a cada mudança no app e guarda como
+# Gera o APK do Ledit's (Android, arm64) a cada mudança no app e guarda como
 # artefato da execução, para baixar direto no celular. Também dá para rodar à
 # mão em Actions > APK Android > Run workflow.
 name: APK Android
@@ -70,12 +70,12 @@ jobs:
       - name: Dar nome ao APK
         run: |
           version=$(node -p "require('./app.json').expo.version")
-          cp android/app/build/outputs/apk/release/app-release.apk "Bobina-${version}-${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "Ledits-${version}-${{ github.run_number }}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Bobina-APK-${{ github.run_number }}
-          path: bobina/Bobina-*.apk
+          name: Ledits-APK-${{ github.run_number }}
+          path: bobina/Ledits-*.apk
           retention-days: 30
           compression-level: 0
           if-no-files-found: error

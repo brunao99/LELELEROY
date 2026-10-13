@@ -21,6 +21,8 @@ import { colors, space } from '@/ui/theme';
 
 let toastSeq = 0;
 
+const WORDMARK = require('../../../assets/brand/wordmark.png');
+
 /** Formatos de atalho, com o desenho do quadro em pontos. */
 const FORMATS: { ratio: Ratio; label: string; use: string; w: number; h: number }[] = [
   { ratio: '9:16', label: '9:16', use: 'Reels e TikTok', w: 22, h: 39 },
@@ -49,11 +51,11 @@ export default function Create() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.bar}>
+        <Image source={WORDMARK} style={styles.wordmark} resizeMode="contain" accessibilityRole="image" accessibilityLabel="Ledit's" />
         <IconButton icon={Settings} label="Configurações" onPress={() => router.push('/settings')} />
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          <Text style={styles.eyebrow}>{"LEDIT'S"}</Text>
           <Text style={styles.largeTitle} accessibilityRole="header">
             Criar
           </Text>
@@ -132,10 +134,10 @@ const hairline = { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  bar: { height: 44, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingRight: space[2] },
+  bar: { height: 44, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingLeft: space[4], paddingRight: space[2] },
+  wordmark: { height: 22, width: (22 * 822) / 262 },
   content: { paddingHorizontal: space[4], paddingBottom: space[7] },
   hero: { paddingTop: space[1], gap: 2 },
-  eyebrow: { color: colors.accent, fontSize: 12, fontWeight: '700', letterSpacing: 1.6 },
   largeTitle: { color: colors.text, fontSize: 34, lineHeight: 41, fontWeight: '700', letterSpacing: -0.6 },
   big: {
     marginTop: space[5],

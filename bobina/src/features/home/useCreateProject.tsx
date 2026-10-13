@@ -12,7 +12,7 @@ import { setRatio } from '@/core/ops';
 import type { Ratio } from '@/core/types';
 import { importAll, pickVisualMedia } from '@/features/media/pick';
 import { deleteProject, saveProject } from '@/storage/projects';
-import { ProgressDialog } from '@/ui/Dialogs';
+import { BrandProgressDialog } from '@/ui/Dialogs';
 
 export function useCreateProject(onError: (message: string) => void) {
   const router = useRouter();
@@ -43,11 +43,12 @@ export function useCreateProject(onError: (message: string) => void) {
   };
 
   const dialog = (
-    <ProgressDialog
+    <BrandProgressDialog
       visible={importing !== null}
-      title="Importando mídias"
+      title="Importando seus vídeos"
       detail={importing ? `${importing.done} de ${importing.total}` : undefined}
-      fraction={importing ? importing.done / Math.max(1, importing.total) : null}
+      // Com um arquivo só não há etapas para mostrar: a marca respira até terminar.
+      fraction={importing && importing.total > 1 ? importing.done / importing.total : null}
     />
   );
 

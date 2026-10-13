@@ -21,7 +21,9 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"]
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -48,11 +50,22 @@
         {
           "photosPermission": "O Ledit's precisa de acesso à galeria para salvar os vídeos exportados.",
           "savePhotosPermission": "O Ledit's salva os vídeos exportados na sua galeria.",
-          "granularPermissions": ["video"]
+          "granularPermissions": [
+            "video"
+          ]
         }
       ],
       "expo-sharing",
       "./plugins/withCrashLog",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120,
+          "resizeMode": "contain",
+          "backgroundColor": "#0b0c0f"
+        }
+      ],
       [
         "expo-build-properties",
         {

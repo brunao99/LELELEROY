@@ -124,7 +124,6 @@ export default function MyProjects() {
           contentContainerStyle={[styles.list, { paddingBottom: space[6] }, projects.length === 0 && { flexGrow: 1 }]}
           ListHeaderComponent={
             <View style={styles.hero}>
-              <Text style={styles.eyebrow}>{"LEDIT'S"}</Text>
               <Text style={styles.largeTitle} accessibilityRole="header">
                 Meus projetos
               </Text>
@@ -175,7 +174,6 @@ const styles = StyleSheet.create({
   barEdge: { position: 'absolute', left: 0, right: 0, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
   list: { paddingHorizontal: space[4], gap: space[5] },
   hero: { paddingTop: space[1], paddingBottom: space[2], gap: 2 },
-  eyebrow: { color: colors.accent, fontSize: 12, fontWeight: '700', letterSpacing: 1.6 },
   largeTitle: { color: colors.text, fontSize: 34, lineHeight: 41, fontWeight: '700', letterSpacing: -0.6 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space[6], gap: space[3], paddingBottom: space[8] },
   emptyIcon: {

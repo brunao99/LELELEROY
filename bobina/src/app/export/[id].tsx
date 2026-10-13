@@ -8,9 +8,10 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Asset, requestPermissionsAsync } from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { ArrowLeft, CheckCircle2, Share2 } from 'lucide-react-native';
+import { ArrowLeft, Share2 } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { buildComposition } from '@/core/composition';
@@ -30,7 +31,8 @@ import { pauseBackgroundWork, useEditor } from '@/state/editor';
 import { checkProjectFiles, loadProject, saveProject } from '@/storage/projects';
 import { Button, IconButton } from '@/ui/Button';
 import { ChoiceRow } from '@/ui/Chip';
-import { ProgressBar } from '@/ui/Feedback';
+import { BrandBurst } from '@/ui/BrandBurst';
+import { BrandProgress } from '@/ui/BrandProgress';
 import { SectionLabel } from '@/ui/Panel';
 import { Txt } from '@/ui/Text';
 import { colors, radius, space } from '@/ui/theme';
@@ -42,6 +44,10 @@ type Stage =
   | { kind: 'saving' }
   | { kind: 'done'; uri: string; savedToGallery: boolean }
   | { kind: 'error'; message: string };
+
+/** Os textos do "vídeo pronto" sobem logo depois do salto da marca. */
+const DONE_TEXT = FadeInDown.duration(320).delay(160);
+const DONE_ACTIONS = FadeInDown.duration(320).delay(260);
 
 const RESOLUTIONS: { value: ExportResolution; label: string }[] = [
   { value: 720, label: '720p' },
@@ -205,29 +211,34 @@ export default function ExportScreen() {
 
       {stage.kind === 'done' ? (
         <View style={styles.center}>
-          <CheckCircle2 size={56} color={colors.success} />
-          <Txt variant="xl" align="center">
-            Vídeo pronto
-          </Txt>
-          <Txt variant="sm" tone="muted" align="center">
-            {stage.savedToGallery
-              ? 'Salvo na galeria do aparelho.'
-              : 'Não deu para salvar na galeria (permissão negada). Você ainda pode compartilhar o arquivo.'}
-          </Txt>
-          <Button label="Compartilhar" icon={Share2} size="lg" onPress={share} style={{ alignSelf: 'stretch' }} />
-          <Button label="Voltar ao editor" variant="secondary" onPress={() => router.back()} style={{ alignSelf: 'stretch' }} />
-          <Button label="Ir para o início" variant="ghost" onPress={() => router.dismissTo('/')} />
+          <BrandBurst size={96} />
+          <Animated.View entering={DONE_TEXT} style={styles.doneText}>
+            <Txt variant="xl" align="center">
+              Vídeo pronto
+            </Txt>
+            <Txt variant="sm" tone="muted" align="center">
+              {stage.savedToGallery
+                ? 'Salvo na galeria do aparelho.'
+                : 'Não deu para salvar na galeria (permissão negada). Você ainda pode compartilhar o arquivo.'}
+            </Txt>
+          </Animated.View>
+          <Animated.View entering={DONE_ACTIONS} style={styles.doneActions}>
+            <Button label="Compartilhar" icon={Share2} size="lg" onPress={share} style={{ alignSelf: 'stretch' }} />
+            <Button label="Voltar ao editor" variant="secondary" onPress={() => router.back()} style={{ alignSelf: 'stretch' }} />
+            <Button label="Ir para o início" variant="ghost" onPress={() => router.dismissTo('/')} />
+          </Animated.View>
         </View>
       ) : busy ? (
         <View style={styles.center}>
+          <BrandProgress size={128} progress={stage.kind === 'rendering' ? stage.fraction : stage.kind === 'preparing' ? stage.fraction : null} />
+          {stage.kind === 'rendering' ? (
+            <Txt variant="display" align="center" tabular accessibilityLabel={`Exportando ${Math.round(stage.fraction * 100)} por cento`}>
+              {Math.round(stage.fraction * 100)}%
+            </Txt>
+          ) : null}
           <Txt variant="lg" align="center">
-            {stage.kind === 'rendering'
-              ? `Exportando ${Math.round(stage.fraction * 100)}%`
-              : stage.kind === 'saving'
-                ? 'Salvando na galeria'
-                : stage.label}
+            {stage.kind === 'rendering' ? 'Exportando' : stage.kind === 'saving' ? 'Salvando na galeria' : stage.label}
           </Txt>
-          <ProgressBar fraction={stage.kind === 'rendering' ? stage.fraction : stage.kind === 'preparing' ? stage.fraction : null} />
           <Txt variant="sm" tone="muted" align="center">
             {"Mantenha o Ledit's aberto até terminar. Sair do app interrompe a exportação."}
           </Txt>
@@ -304,4 +315,6 @@ const styles = StyleSheet.create({
     gap: space[1],
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space[4], paddingHorizontal: space[6] },
+  doneText: { alignItems: 'center', gap: space[2], marginTop: -space[6] },
+  doneActions: { alignSelf: 'stretch', alignItems: 'center', gap: space[3], marginTop: space[2] },
 });

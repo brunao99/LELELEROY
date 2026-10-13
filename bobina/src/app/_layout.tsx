@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { Intro } from '@/features/intro/Intro';
 import { colors } from '@/ui/theme';
 
 export default function RootLayout() {
@@ -22,6 +23,7 @@ export default function RootLayout() {
             animation: 'fade',
           }}
         />
+        <Intro />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

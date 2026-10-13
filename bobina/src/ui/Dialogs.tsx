@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { BrandProgress } from './BrandProgress';
 import { Button } from './Button';
 import { ProgressBar } from './Feedback';
 import { Txt } from './Text';
@@ -84,4 +85,30 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: space[2] },
+});
+
+/**
+ * Progresso de tela cheia com a marca enchendo (importar mídias): é a espera
+ * mais visível do app, então ganha a identidade inteira em vez de uma barra.
+ */
+export function BrandProgressDialog({ visible, title, fraction, detail }: { visible: boolean; title: string; fraction: number | null; detail?: string }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <View style={brandStyles.scrim} accessibilityLiveRegion="polite" accessibilityLabel={`${title}${detail ? `, ${detail}` : ''}`}>
+        <BrandProgress progress={fraction} size={112} />
+        <Txt variant="lg" align="center" style={{ marginTop: space[5] }}>
+          {title}
+        </Txt>
+        {detail ? (
+          <Txt variant="sm" tone="muted" align="center" tabular>
+            {detail}
+          </Txt>
+        ) : null}
+      </View>
+    </Modal>
+  );
+}
+
+const brandStyles = StyleSheet.create({
+  scrim: { flex: 1, backgroundColor: 'rgba(11,12,15,0.94)', alignItems: 'center', justifyContent: 'center', gap: space[1], padding: space[6] },
 });
