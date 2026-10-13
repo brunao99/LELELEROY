@@ -1,0 +1,67 @@
+{
+  "expo": {
+    "name": "Bobina",
+    "slug": "bobina",
+    "scheme": "bobina",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0b0c0f",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.brunao99.bobina"
+    },
+    "android": {
+      "package": "com.brunao99.bobina",
+      "adaptiveIcon": {
+        "backgroundColor": "#0b0c0f",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O Bobina abre a sua galeria para você escolher os vídeos e fotos do projeto.",
+          "cameraPermission": false,
+          "microphonePermission": "O Bobina usa o microfone para gravar narrações."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "O Bobina usa o microfone para gravar narrações.",
+          "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "O Bobina precisa de acesso à galeria para salvar os vídeos exportados.",
+          "savePhotosPermission": "O Bobina salva os vídeos exportados na sua galeria.",
+          "granularPermissions": ["video"]
+        }
+      ],
+      "expo-sharing",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
