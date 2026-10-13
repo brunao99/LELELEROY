@@ -110,6 +110,19 @@ confirmar no celular está em "A verificar".
 - Real: o salvamento automático do editor gravava por cima a configuração antiga
 - Status: corrigido (a escolha também vai para o projeto aberto no editor)
 
+### BUG-015: o app fechava ao abrir um vídeo para editar (Android)
+
+- Severidade: S1
+- Fluxo: F01 (criar projeto)
+- Build: APK 0.1.0 nº 1, Samsung (One UI)
+- Passos: Novo projeto, escolher um vídeo
+- Esperado: o editor abre com o vídeo
+- Real: "o app Bobina apresenta falhas contínuas"
+- Causa: a leitura do primeiro quadro rodava o extrator da skia-video numa thread sem contexto OpenGL; no Android ele lança "Skia context is not initialized" fora do tratamento de erros
+- Evidência: `EGLUtils.getCurrentContextOrThrows()` em `VideoCompositionFramesExtractorSync.start()`; a exportação e a velocidade criavam a superfície antes, a leitura não
+- Status: corrigido (superfície do Skia antes de ler; a prévia também garante o contexto e mostra erro em vez de fechar). Confirmado pelo usuário no APK nº 3.
+- Também: tela de erro com "Compartilhar erro" para qualquer erro que fecharia o app.
+
 ## A verificar no aparelho
 
 - Desempenho do preview com 3+ vídeos 1080p ao mesmo tempo (transição + sobreposição).
@@ -121,4 +134,4 @@ confirmar no celular está em "A verificar".
 - Gestos da timeline dentro da rolagem (alças × rolar) no Android e no iOS.
 - iOS inteiro: este ambiente não compila iOS (precisa de Mac ou EAS Build).
 
-Resumo: 14 bugs, 0 abertos (S1: 2, S2: 8, S3: 4, todos corrigidos). BUG-011 a 014 apareceram na revisão final do código.
+Resumo: 15 bugs, 0 abertos (S1: 3, S2: 8, S3: 4, todos corrigidos). BUG-011 a 014 apareceram na revisão final do código.
