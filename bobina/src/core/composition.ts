@@ -82,8 +82,13 @@ export interface CompositionOptions {
 
 const US = 1_000_000;
 
+/**
+ * Chave da cópia acelerada. O sufixo de versão muda quando a cópia passa a ser
+ * feita de outro jeito (v2: resolução da mídia e 60 qps); as antigas deixam de
+ * servir e são apagadas ao abrir o projeto.
+ */
 export function bakeKey(assetId: string, speed: number, keepPitch: boolean): string {
-  return `${assetId}@${speed.toFixed(3)}${keepPitch ? 'p' : ''}`;
+  return `${assetId}@${speed.toFixed(3)}${keepPitch ? 'p' : ''}~v2`;
 }
 
 type AudioClipLike = {

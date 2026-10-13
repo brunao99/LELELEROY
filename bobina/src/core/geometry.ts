@@ -70,3 +70,18 @@ export function exportBitRate(size: Size, fps: number): number {
   const bits = size.width * size.height * fps * 0.15;
   return Math.round(Math.min(60_000_000, Math.max(2_000_000, bits)));
 }
+
+/**
+ * Lado menor do maior vídeo usado no projeto (1080 para um vídeo Full HD).
+ * Exportar acima disso aumenta o arquivo sem acrescentar detalhe. 0 sem vídeos.
+ */
+export function sourceShortSide(project: Project): number {
+  let best = 0;
+  for (const clip of [...project.main, ...project.overlays]) {
+    const asset = project.assets[clip.assetId];
+    if (!asset || asset.kind !== 'video') continue;
+    const size = displaySize(asset);
+    best = Math.max(best, Math.min(size.width, size.height));
+  }
+  return best;
+}

@@ -15,13 +15,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { buildComposition } from '@/core/composition';
 import { countUnavailable } from '@/core/files';
-import { exportBitRate, exportSize } from '@/core/geometry';
+import { exportBitRate, exportSize, sourceShortSide } from '@/core/geometry';
 import { setExportSettings } from '@/core/ops';
 import { buildRenderPlan } from '@/core/renderPlan';
 import { formatTime } from '@/core/time';
 import type { ExportFps, ExportResolution, Project } from '@/core/types';
 import { runAudioRender, runBake } from '@/engine/bake';
-import { ExportCancelled, renderVideo } from '@/engine/exporter';
+import { ExportCancelled, encoderConfig, renderVideo } from '@/engine/exporter';
 import { FONT_SOURCES } from '@/engine/fonts';
 import { buildAllText, imageAssetIds, loadImages } from '@/engine/resources';
 import { gradeEffect } from '@/engine/shaders';
@@ -79,6 +79,14 @@ export default function ExportScreen() {
   const duration = useMemo(() => (project ? buildRenderPlan(project).duration : 0), [project]);
   const megabytes = size && settings ? ((exportBitRate(size, settings.fps) + 192_000) * (duration / 1_000_000)) / 8 / 1_000_000 : 0;
   const missingCount = project ? countUnavailable(project, unavailable) : 0;
+  // O que o codificador do aparelho aceita de verdade (no Android pode ser menos que o pedido).
+  const device = useMemo(
+    () => (size && settings ? encoderConfig(size.width, size.height, settings.fps, exportBitRate(size, settings.fps)) : null),
+    [size, settings],
+  );
+  const capped = !!device && !!size && !!settings && (device.width * device.height < size.width * size.height || device.fps < settings.fps);
+  const sourceShort = useMemo(() => (project ? sourceShortSide(project) : 0), [project]);
+  const upscaled = !!settings && sourceShort > 0 && settings.resolution > sourceShort;
 
   const update = (patch: Partial<Project['exportSettings']>) => {
     if (!project) return;
@@ -234,7 +242,7 @@ export default function ExportScreen() {
                   {project.name}
                 </Txt>
                 <Txt variant="xl" tabular>
-                  {formatTime(duration, false)} · {size.width}×{size.height}
+                  {formatTime(duration, false)} · {capped && device ? device.width : size.width}×{capped && device ? device.height : size.height}
                 </Txt>
                 <Txt variant="sm" tone="muted">
                   MP4 (H.264 + AAC) · cerca de {megabytes < 1 ? '<1' : Math.round(megabytes)} MB
@@ -244,13 +252,23 @@ export default function ExportScreen() {
               <ChoiceRow options={RESOLUTIONS} value={settings.resolution} onChange={(v) => update({ resolution: v })} />
               <SectionLabel>Quadros por segundo</SectionLabel>
               <ChoiceRow options={FPS.map((f) => ({ value: f, label: `${f} fps` }))} value={settings.fps} onChange={(v) => update({ fps: v })} />
+              {capped && device ? (
+                <Txt variant="sm" tone="muted" style={{ paddingHorizontal: space[4] }}>
+                  Seu celular exporta no máximo {device.width}×{device.height} a {device.fps} qps. O vídeo vai sair nesse tamanho.
+                </Txt>
+              ) : null}
+              {upscaled ? (
+                <Txt variant="sm" tone="muted" style={{ paddingHorizontal: space[4] }}>
+                  Seus vídeos têm {sourceShort}p. Exportar acima disso deixa o arquivo maior, sem mais detalhe.
+                </Txt>
+              ) : null}
               {missingCount > 0 ? (
                 <Txt variant="sm" tone="danger" style={{ paddingHorizontal: space[4] }}>
                   {missingCount === 1 ? '1 item está sem a mídia original' : `${missingCount} itens estão sem a mídia original`} e vai
                   sair em preto e sem som. Volte ao editor para substituir.
                 </Txt>
               ) : null}
-              {settings.resolution >= 1440 ? (
+              {settings.resolution >= 1440 && !capped ? (
                 <Txt variant="xs" tone="muted" style={{ paddingHorizontal: space[4] }}>
                   2K e 4K dependem do aparelho. Se falhar, tente 1080p.
                 </Txt>

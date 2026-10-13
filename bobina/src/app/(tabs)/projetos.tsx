@@ -1,36 +1,32 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Clapperboard, Plus, Settings } from 'lucide-react-native';
+import { Clapperboard, Settings } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { createProject, defaultProjectName } from '@/core/defaults';
-import { newId } from '@/core/ids';
 import { ProjectCard } from '@/features/home/ProjectCard';
-import { importAll, pickVisualMedia } from '@/features/media/pick';
+import { useCreateProject } from '@/features/home/useCreateProject';
 import {
   deleteProject,
   duplicateProject,
   listProjects,
   loadProject,
   renameProjectOnDisk,
-  saveProject,
   type ProjectSummary,
 } from '@/storage/projects';
 import { IconButton } from '@/ui/Button';
-import { PromptDialog, ProgressDialog } from '@/ui/Dialogs';
+import { PromptDialog } from '@/ui/Dialogs';
 import { Toast, type ToastMessage } from '@/ui/Feedback';
 import { PressableScale } from '@/ui/PressableScale';
 import { colors, space } from '@/ui/theme';
 
 let toastSeq = 0;
 
-export default function Home() {
+export default function MyProjects() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
-  const [importing, setImporting] = useState<{ done: number; total: number } | null>(null);
   const [renaming, setRenaming] = useState<ProjectSummary | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
@@ -44,29 +40,7 @@ export default function Home() {
 
   useFocusEffect(refresh);
 
-  const create = async () => {
-    const picked = await pickVisualMedia();
-    if (picked.length === 0) return;
-    const id = newId('p');
-    setImporting({ done: 0, total: picked.length });
-    try {
-      const { assets, failed } = await importAll(id, picked, (done, total) => setImporting({ done, total }));
-      if (assets.length === 0) {
-        deleteProject(id);
-        say('Não foi possível abrir nenhuma das mídias escolhidas.', 'error');
-        return;
-      }
-      const now = Date.now();
-      saveProject(createProject({ id, name: defaultProjectName(now), now, assets }));
-      if (failed.length) say(`${failed.length} mídia(s) não abriram e ficaram de fora.`, 'error');
-      router.push({ pathname: '/editor/[id]', params: { id } });
-    } catch (e) {
-      deleteProject(id);
-      say(`Erro ao importar: ${String(e)}`, 'error');
-    } finally {
-      setImporting(null);
-    }
-  };
+  const { create, dialog } = useCreateProject((message) => say(message, 'error'));
 
   const menu = (summary: ProjectSummary) => {
     Alert.alert(summary.name, undefined, [
@@ -126,13 +100,12 @@ export default function Home() {
     opacity: interpolate(scrollY.get(), [40, 64], [0, 1], Extrapolation.CLAMP),
   }));
 
-  const footer = insets.bottom + space[4];
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.bar}>
         <Animated.Text style={[styles.barTitle, barTitle]} accessibilityElementsHidden importantForAccessibility="no">
-          Projetos
+          Meus projetos
         </Animated.Text>
         <View style={styles.barRight}>
           <IconButton icon={Settings} label="Configurações" onPress={() => router.push('/settings')} />
@@ -148,12 +121,12 @@ export default function Home() {
           onScroll={onScroll}
           scrollEventThrottle={16}
           columnWrapperStyle={{ gap: space[3] }}
-          contentContainerStyle={[styles.list, { paddingBottom: footer + 52 + space[6] }, projects.length === 0 && { flexGrow: 1 }]}
+          contentContainerStyle={[styles.list, { paddingBottom: space[6] }, projects.length === 0 && { flexGrow: 1 }]}
           ListHeaderComponent={
             <View style={styles.hero}>
               <Text style={styles.eyebrow}>{"LEDIT'S"}</Text>
               <Text style={styles.largeTitle} accessibilityRole="header">
-                Projetos
+                Meus projetos
               </Text>
             </View>
           }
@@ -162,10 +135,11 @@ export default function Home() {
               <View style={styles.emptyIcon}>
                 <Clapperboard size={28} color={colors.accent} strokeWidth={1.75} />
               </View>
-              <Text style={styles.emptyTitle}>Seu primeiro vídeo começa aqui</Text>
-              <Text style={styles.emptyText}>
-                Toque em Novo projeto e escolha os vídeos e fotos na ordem em que devem aparecer.
-              </Text>
+              <Text style={styles.emptyTitle}>Nenhum projeto ainda</Text>
+              <Text style={styles.emptyText}>Os vídeos que você começar aparecem aqui, do mais recente para o mais antigo.</Text>
+              <PressableScale accessibilityRole="button" onPress={() => create()} style={styles.emptyButton}>
+                <Text style={styles.emptyButtonLabel}>Criar projeto</Text>
+              </PressableScale>
             </View>
           }
           renderItem={({ item }) => (
@@ -180,25 +154,7 @@ export default function Home() {
         />
       )}
 
-      <View style={[styles.fabWrap, { bottom: footer }]} pointerEvents="box-none">
-        <PressableScale
-          accessibilityRole="button"
-          accessibilityLabel="Novo projeto"
-          accessibilityHint="Escolha vídeos e fotos para começar"
-          onPress={create}
-          style={styles.fab}
-        >
-          <Plus size={20} color={colors.onAccent} strokeWidth={2.5} />
-          <Text style={styles.fabLabel}>Novo projeto</Text>
-        </PressableScale>
-      </View>
-
-      <ProgressDialog
-        visible={importing !== null}
-        title="Importando mídias"
-        detail={importing ? `${importing.done} de ${importing.total}` : undefined}
-        fraction={importing ? importing.done / Math.max(1, importing.total) : null}
-      />
+      {dialog}
       <PromptDialog
         visible={renaming !== null}
         title="Renomear projeto"
@@ -236,16 +192,6 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { color: colors.text, fontSize: 22, lineHeight: 28, fontWeight: '700', letterSpacing: -0.4, textAlign: 'center' },
   emptyText: { color: colors.textMuted, fontSize: 15, lineHeight: 22, textAlign: 'center', maxWidth: 300 },
-  fabWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  fab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space[2],
-    height: 52,
-    paddingHorizontal: space[6],
-    borderRadius: 14,
-    borderCurve: 'continuous',
-    backgroundColor: colors.accent,
-  },
-  fabLabel: { color: colors.onAccent, fontSize: 17, fontWeight: '600', letterSpacing: -0.2 },
+  emptyButton: { marginTop: space[3], height: 48, paddingHorizontal: space[5], borderRadius: 12, borderCurve: 'continuous', backgroundColor: colors.accent, justifyContent: 'center' },
+  emptyButtonLabel: { color: colors.onAccent, fontSize: 16, fontWeight: '600', letterSpacing: -0.2 },
 });

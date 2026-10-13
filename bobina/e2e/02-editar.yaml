@@ -16,7 +16,7 @@ appId: com.brunao99.bobina
 # Texto na agulha
 - tapOn: "Texto"
 - assertVisible: "Digite o texto"
-- inputText: "Olá Bobina"
+- inputText: "Olá Ledit"
 - tapOn: "Confirmar"
 # Anda uns 2 s na timeline, seleciona o clipe sob a agulha e divide
 - tapOn: "Voltar"

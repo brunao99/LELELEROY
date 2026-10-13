@@ -15,9 +15,15 @@ import type { AudioRender, Bake, MediaAsset, Project } from '@/core/types';
 import { absolutePath, ensureDir, fileUri, projectDir, projectFile } from '@/storage/paths';
 
 import { decodeFile } from './audioDecode';
+import { encoderConfig } from './exporter';
 
-const BAKE_FPS = 30;
-const BAKE_MAX_SIDE = 1920;
+/**
+ * A cópia acelerada mantém a resolução da mídia (até 4K) e grava a 60 qps, para
+ * não perder nitidez nem fluidez numa exportação em 2K/4K ou a 60 qps. O
+ * codificador do aparelho pode pedir menos (ver encoderConfig).
+ */
+const BAKE_FPS = 60;
+const BAKE_MAX_SIDE = 3840;
 
 let runtime: WorkletRuntime | null = null;
 function bakeRuntime(): WorkletRuntime {
@@ -65,9 +71,10 @@ function bakeVideo(
       if (error) reject(new Error(error));
       else resolve();
     };
+    const config = encoderConfig(size.width, size.height, BAKE_FPS, Math.min(60_000_000, Math.round(size.width * size.height * BAKE_FPS * 0.15)));
     runOnRuntime(bakeRuntime(), () => {
       'worklet';
-      const { width, height } = size;
+      const { width, height, fps, bitRate, encoderName } = config;
       let encoder: ReturnType<typeof SkiaVideo.createVideoEncoder> | null = null;
       const extractor = SkiaVideo.createVideoCompositionFramesExtractorSync(composition);
       try {
@@ -82,19 +89,19 @@ function bakeVideo(
           cache.__bakeH = height;
         }
         encoder = SkiaVideo.createVideoEncoder(
-          { outPath, width, height, frameRate: BAKE_FPS, bitRate: Math.round(width * height * BAKE_FPS * 0.2) },
+          { outPath, width, height, frameRate: fps, bitRate, encoderName },
           null,
         );
         encoder.prepare();
         extractor.start();
         const canvas = surface.getCanvas();
         const pooled = SkiaVideo.runWithAutoreleasePool ?? ((fn: () => void) => fn());
-        const total = Math.max(1, Math.ceil(outSeconds * BAKE_FPS));
+        const total = Math.max(1, Math.ceil(outSeconds * fps));
         const target = surface;
         const enc = encoder;
         for (let i = 0; i < total; i++) {
           if (cancelled.getDirty()) return;
-          const outT = i / BAKE_FPS;
+          const outT = i / fps;
           const srcT = Math.min(sourceSeconds - 1e-3, outT * speed);
           pooled(() => {
             const frames = extractor.decodeCompositionFrames(srcT);
