@@ -100,7 +100,7 @@ export interface Visual {
 }
 
 export interface AudioProps {
-  /** 0..1 */
+  /** 0..2 (acima de 1 o som é amplificado no WAV processado) */
   volume: number;
   fadeIn: Micros;
   fadeOut: Micros;
@@ -250,6 +250,12 @@ export interface Bake {
   audioFile: string | null;
 }
 
+/** Áudio de um clipe já processado (fades, e velocidade quando há fade), em WAV. */
+export interface AudioRender {
+  key: string;
+  file: string;
+}
+
 export interface Project {
   schemaVersion: 1;
   id: string;
@@ -268,6 +274,7 @@ export interface Project {
   captions: CaptionTrack;
   coverTime: Micros | null;
   bakes: Record<string, Bake>;
+  audioRenders: Record<string, AudioRender>;
 }
 
 export type TimedItem = OverlayClip | AudioClip | TextItem;

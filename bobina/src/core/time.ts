@@ -31,6 +31,7 @@ export function clamp(value: number, lo: number, hi: number): number {
 
 /** `00:03.2`, ou `1:02:03.4` acima de uma hora. */
 export function formatTime(us: Micros, withTenths = true): string {
+  'worklet';
   const totalTenths = Math.floor(Math.max(0, us) / 100_000);
   const tenths = totalTenths % 10;
   const totalSec = Math.floor(totalTenths / 10);

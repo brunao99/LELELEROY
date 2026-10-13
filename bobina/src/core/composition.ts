@@ -49,10 +49,26 @@ export interface BakeRequest {
   needsAudio: boolean;
 }
 
+/** Áudio de um clipe com fade, processado à parte (o motor só tem volume constante). */
+export interface AudioRenderRequest {
+  key: string;
+  assetId: string;
+  speed: number;
+  keepPitch: boolean;
+  sourceIn: Micros;
+  sourceOut: Micros;
+  fadeIn: Micros;
+  fadeOut: Micros;
+  /** Ganho aplicado no WAV (volume acima de 100%); 1 quando não há. */
+  gain: number;
+}
+
 export interface CompositionResult {
   composition: Composition | null;
   /** Clipes com velocidade sem cópia pronta. Enquanto isso tocam a 1x (vídeo) e mudos. */
   missing: BakeRequest[];
+  /** Clipes com fade sem o áudio processado. Enquanto isso tocam sem fade. */
+  missingAudio: AudioRenderRequest[];
 }
 
 export interface CompositionOptions {
@@ -66,6 +82,33 @@ const US = 1_000_000;
 
 export function bakeKey(assetId: string, speed: number, keepPitch: boolean): string {
   return `${assetId}@${speed.toFixed(3)}${keepPitch ? 'p' : ''}`;
+}
+
+type AudioClipLike = {
+  assetId: string;
+  speed: number;
+  keepPitch: boolean;
+  sourceIn: Micros;
+  sourceOut: Micros;
+  fadeIn: Micros;
+  fadeOut: Micros;
+  volume: number;
+};
+
+/** Fade ou volume acima de 100%: o motor só tem volume constante até 1. */
+export function needsAudioRender(clip: Pick<AudioClipLike, 'fadeIn' | 'fadeOut' | 'volume'>): boolean {
+  return clip.fadeIn > 0 || clip.fadeOut > 0 || clip.volume > 1;
+}
+
+function renderGain(clip: Pick<AudioClipLike, 'volume'>): number {
+  return clip.volume > 1 ? Math.round(clip.volume * 100) / 100 : 1;
+}
+
+export function audioRenderKey(clip: AudioClipLike): string {
+  const parts = [clip.assetId, clip.speed.toFixed(3), clip.keepPitch ? 'p' : '', clip.sourceIn, clip.sourceOut, clip.fadeIn, clip.fadeOut];
+  const gain = renderGain(clip);
+  if (gain !== 1) parts.push(`g${gain}`);
+  return parts.join('|');
 }
 
 /** Uma cópia serve se for da mesma mídia e velocidade e cobrir o trecho do clipe. */
@@ -104,110 +147,137 @@ function addRequest(list: BakeRequest[], request: BakeRequest) {
   same.needsAudio = same.needsAudio || request.needsAudio;
 }
 
-export function buildComposition(project: Project, options: CompositionOptions): CompositionResult {
-  const total = projectDuration(project);
-  const missing: BakeRequest[] = [];
-  if (total <= 0) return { composition: null, missing };
-  const items: CompositionItem[] = [];
-  const { resolve, previewMaxSide } = options;
+interface Collect {
+  project: Project;
+  total: Micros;
+  resolve: (relative: string) => string;
+  items: CompositionItem[];
+  missing: BakeRequest[];
+  missingAudio: AudioRenderRequest[];
+}
 
-  const visual = (clip: MainClip | OverlayClip, start: Micros, audible: boolean) => {
-    const asset = project.assets[clip.assetId];
-    if (!asset || asset.kind !== 'video') return;
-    const duration = clipDuration(clip);
-    const end = Math.min(start + duration, total);
-    if (end <= start) return;
-    const resolution = previewResolution(asset, previewMaxSide);
-    if (clip.speed === 1) {
+/**
+ * Som de um clipe que precisa de processamento (fade): usa o WAV pronto ou pede
+ * um. Devolve true quando o som já está resolvido (item adicionado).
+ */
+function addRenderedAudio(c: Collect, clip: AudioClipLike & { id: string }, start: Micros, end: Micros, id: string): boolean {
+  const key = audioRenderKey(clip);
+  const render = c.project.audioRenders[key];
+  if (render) {
+    c.items.push({
+      kind: 'audio',
+      id,
+      path: c.resolve(render.file),
+      compositionStartTime: start / US,
+      startTime: 0,
+      duration: (end - start) / US,
+      // O ganho acima de 1 já está no arquivo.
+      volume: Math.min(1, clip.volume),
+    });
+    return true;
+  }
+  if (!c.missingAudio.some((r) => r.key === key)) {
+    c.missingAudio.push({
+      key,
+      assetId: clip.assetId,
+      speed: clip.speed,
+      keepPitch: clip.keepPitch,
+      sourceIn: clip.sourceIn,
+      sourceOut: clip.sourceOut,
+      fadeIn: clip.fadeIn,
+      fadeOut: clip.fadeOut,
+      gain: renderGain(clip),
+    });
+  }
+  return false;
+}
+
+function addVisual(c: Collect, clip: MainClip | OverlayClip, start: Micros, audible: boolean, previewMaxSide?: number) {
+  const { project, total, resolve, items, missing } = c;
+  const asset = project.assets[clip.assetId];
+  if (!asset || asset.kind !== 'video') return;
+  const duration = clipDuration(clip);
+  const end = Math.min(start + duration, total);
+  if (end <= start) return;
+  const resolution = previewResolution(asset, previewMaxSide);
+  // Com fade, o som vem do WAV processado; o vídeo fica mudo.
+  const rendered = audible && needsAudioRender(clip) ? addRenderedAudio(c, clip, start, end, `${clip.id}#a`) : false;
+  const fadePending = audible && needsAudioRender(clip) && !rendered;
+
+  if (clip.speed === 1) {
+    items.push({
+      id: clip.id,
+      path: resolve(asset.file),
+      compositionStartTime: start / US,
+      startTime: clip.sourceIn / US,
+      duration: (end - start) / US,
+      ...(resolution ? { resolution } : {}),
+      // Enquanto o fade não fica pronto, toca o som original.
+      audio: audible && !rendered ? { volume: Math.min(1, clip.volume) } : false,
+    });
+    return;
+  }
+  const bake = findBake(project, clip);
+  if (bake?.videoFile) {
+    items.push({
+      id: clip.id,
+      path: resolve(bake.videoFile),
+      compositionStartTime: start / US,
+      startTime: (clip.sourceIn - bake.from) / clip.speed / US,
+      duration: (end - start) / US,
+      ...(resolution ? { resolution } : {}),
+      audio: false,
+    });
+  } else {
+    // Sem a cópia ainda: mostra a mídia a 1x pelo tempo do clipe, até onde ela der.
+    const available = Math.max(0, asset.duration - clip.sourceIn);
+    const shown = Math.min(end - start, available);
+    if (shown > 0) {
       items.push({
         id: clip.id,
         path: resolve(asset.file),
         compositionStartTime: start / US,
         startTime: clip.sourceIn / US,
-        duration: (end - start) / US,
-        ...(resolution ? { resolution } : {}),
-        audio: audible ? { volume: clip.volume } : false,
-      });
-      return;
-    }
-    const bake = findBake(project, clip);
-    if (bake?.videoFile) {
-      items.push({
-        id: clip.id,
-        path: resolve(bake.videoFile),
-        compositionStartTime: start / US,
-        startTime: (clip.sourceIn - bake.from) / clip.speed / US,
-        duration: (end - start) / US,
+        duration: shown / US,
         ...(resolution ? { resolution } : {}),
         audio: false,
       });
-    } else {
-      // Sem a cópia ainda: mostra a mídia a 1x pelo tempo do clipe, até onde ela der.
-      const available = Math.max(0, asset.duration - clip.sourceIn);
-      const shown = Math.min(end - start, available);
-      if (shown > 0) {
-        items.push({
-          id: clip.id,
-          path: resolve(asset.file),
-          compositionStartTime: start / US,
-          startTime: clip.sourceIn / US,
-          duration: shown / US,
-          ...(resolution ? { resolution } : {}),
-          audio: false,
-        });
-      }
     }
-    if (audible && bake?.audioFile) {
-      items.push({
-        kind: 'audio',
-        id: `${clip.id}#a`,
-        path: resolve(bake.audioFile),
-        compositionStartTime: start / US,
-        startTime: (clip.sourceIn - bake.from) / clip.speed / US,
-        duration: (end - start) / US,
-        volume: clip.volume,
-      });
-    }
-    if (!bake?.videoFile || (audible && !bake?.audioFile)) {
-      addRequest(missing, {
-        key: bakeKey(clip.assetId, clip.speed, clip.keepPitch),
-        assetId: clip.assetId,
-        speed: clip.speed,
-        keepPitch: clip.keepPitch,
-        from: clip.sourceIn,
-        to: clip.sourceOut,
-        needsVideo: true,
-        needsAudio: audible,
-      });
-    }
-  };
-
-  for (const slot of layoutMain(project)) {
-    const asset = project.assets[slot.clip.assetId];
-    const audible = !project.muteMain && !!asset && isAudible(slot.clip.volume, asset);
-    visual(slot.clip, slot.start, audible);
   }
-  for (const overlay of project.overlays) {
-    const asset = project.assets[overlay.assetId];
-    visual(overlay, overlay.start, !!asset && isAudible(overlay.volume, asset));
+  const wantBakedAudio = audible && !rendered && (!needsAudioRender(clip) || fadePending);
+  if (wantBakedAudio && bake?.audioFile) {
+    items.push({
+      kind: 'audio',
+      id: `${clip.id}#a`,
+      path: resolve(bake.audioFile),
+      compositionStartTime: start / US,
+      startTime: (clip.sourceIn - bake.from) / clip.speed / US,
+      duration: (end - start) / US,
+      volume: Math.min(1, clip.volume),
+    });
   }
-  for (const clip of project.audios) addAudioItem(project, clip, total, resolve, items, missing);
-
-  return { composition: { duration: total / US, items }, missing };
+  const needsAudio = audible && !needsAudioRender(clip);
+  if (!bake?.videoFile || (needsAudio && !bake?.audioFile)) {
+    addRequest(missing, {
+      key: bakeKey(clip.assetId, clip.speed, clip.keepPitch),
+      assetId: clip.assetId,
+      speed: clip.speed,
+      keepPitch: clip.keepPitch,
+      from: clip.sourceIn,
+      to: clip.sourceOut,
+      needsVideo: true,
+      needsAudio,
+    });
+  }
 }
 
-function addAudioItem(
-  project: Project,
-  clip: AudioClip,
-  total: Micros,
-  resolve: (relative: string) => string,
-  items: CompositionItem[],
-  missing: BakeRequest[],
-) {
+function addAudioItem(c: Collect, clip: AudioClip) {
+  const { project, total, resolve, items, missing } = c;
   const asset = project.assets[clip.assetId];
   if (!asset || !isAudible(clip.volume, asset)) return;
   const end = Math.min(clip.start + clipDuration(clip), total);
   if (end <= clip.start) return;
+  if (needsAudioRender(clip) && addRenderedAudio(c, clip, clip.start, end, clip.id)) return;
   if (clip.speed === 1) {
     items.push({
       kind: 'audio',
@@ -216,7 +286,7 @@ function addAudioItem(
       compositionStartTime: clip.start / US,
       startTime: clip.sourceIn / US,
       duration: (end - clip.start) / US,
-      volume: clip.volume,
+      volume: Math.min(1, clip.volume),
     });
     return;
   }
@@ -229,10 +299,11 @@ function addAudioItem(
       compositionStartTime: clip.start / US,
       startTime: (clip.sourceIn - bake.from) / clip.speed / US,
       duration: (end - clip.start) / US,
-      volume: clip.volume,
+      volume: Math.min(1, clip.volume),
     });
     return;
   }
+  if (needsAudioRender(clip)) return;
   addRequest(missing, {
     key: bakeKey(clip.assetId, clip.speed, clip.keepPitch),
     assetId: clip.assetId,
@@ -243,6 +314,23 @@ function addAudioItem(
     needsVideo: false,
     needsAudio: true,
   });
+}
+
+export function buildComposition(project: Project, options: CompositionOptions): CompositionResult {
+  const total = projectDuration(project);
+  const c: Collect = { project, total, resolve: options.resolve, items: [], missing: [], missingAudio: [] };
+  if (total <= 0) return { composition: null, missing: [], missingAudio: [] };
+  for (const slot of layoutMain(project)) {
+    const asset = project.assets[slot.clip.assetId];
+    const audible = !project.muteMain && !!asset && isAudible(slot.clip.volume, asset);
+    addVisual(c, slot.clip, slot.start, audible, options.previewMaxSide);
+  }
+  for (const overlay of project.overlays) {
+    const asset = project.assets[overlay.assetId];
+    addVisual(c, overlay, overlay.start, !!asset && isAudible(overlay.volume, asset), options.previewMaxSide);
+  }
+  for (const clip of project.audios) addAudioItem(c, clip);
+  return { composition: { duration: total / US, items: c.items }, missing: c.missing, missingAudio: c.missingAudio };
 }
 
 // ---------------------------------------------------------------- janelas

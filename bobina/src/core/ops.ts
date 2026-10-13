@@ -456,8 +456,10 @@ export function setSpeed(project: Project, id: string, speed: number, keepPitch:
   return next;
 }
 
+export const MAX_VOLUME = 2;
+
 export function setVolume(project: Project, id: string, volume: number): Project {
-  const v = clamp(volume, 0, 1);
+  const v = clamp(volume, 0, MAX_VOLUME);
   const found = findItem(project, id);
   if (!found) return project;
   const update = <T extends MainClip | OverlayClip | AudioClip>(c: T): T => (c.volume === v ? c : { ...c, volume: v });

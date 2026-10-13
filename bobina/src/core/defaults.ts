@@ -210,6 +210,7 @@ export function createProject({ id, name, now, assets }: NewProjectInput): Proje
     captions: defaultCaptionTrack(),
     coverTime: null,
     bakes: {},
+    audioRenders: {},
   };
 }
 

@@ -1,5 +1,6 @@
 import {
   applyFades,
+  applyGain,
   changeSpeed,
   computePeaks,
   encodeWav,
@@ -92,5 +93,16 @@ describe('áudio', () => {
     expect(Array.from(target)).toEqual([0, 0, 0.5, 0.5]);
     mixInto(target, new Float32Array([1, 1]), -1);
     expect(Array.from(target)).toEqual([1, 0, 0.5, 0.5]);
+  });
+});
+
+describe('ganho', () => {
+  it('amplifica sem passar de 1', () => {
+    const buffer: PcmBuffer = { sampleRate: 4, channels: [new Float32Array([0.1, 0.5, -0.9, 1])] };
+    applyGain(buffer, 2);
+    const ch = Array.from(buffer.channels[0]!);
+    expect(ch[0]).toBeCloseTo(0.2);
+    for (const v of ch) expect(Math.abs(v)).toBeLessThanOrEqual(1);
+    expect(ch[2]).toBeLessThan(-0.9);
   });
 });

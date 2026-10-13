@@ -245,3 +245,20 @@ export function mixInto(target: Float32Array, source: Float32Array, offset: numb
   const n = Math.min(source.length - skip, target.length - start);
   for (let i = 0; i < n; i++) target[start + i]! += source[skip + i]! * gain;
 }
+
+/**
+ * Amplifica (`gain` > 1) com limitador suave: abaixo de 0,8 fica linear; acima,
+ * curva até 1 sem cortar seco (evita o chiado de clipping).
+ */
+export function applyGain(buffer: PcmBuffer, gain: number): PcmBuffer {
+  if (gain === 1) return buffer;
+  const knee = 0.8;
+  for (const ch of buffer.channels) {
+    for (let i = 0; i < ch.length; i++) {
+      const v = ch[i]! * gain;
+      const a = Math.abs(v);
+      ch[i] = a <= knee ? v : Math.sign(v) * (knee + (1 - knee) * Math.tanh((a - knee) / (1 - knee)));
+    }
+  }
+  return buffer;
+}

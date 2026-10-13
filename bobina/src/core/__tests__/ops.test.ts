@@ -266,7 +266,7 @@ describe('velocidade, volume e áudio', () => {
     let p = projectWith(4);
     const id = p.main[0]!.id;
     p = setVolume(p, id, 3);
-    expect(p.main[0]!.volume).toBe(1);
+    expect(p.main[0]!.volume).toBe(2);
     p = setFades(p, id, sec(5), sec(1));
     expect(p.main[0]).toMatchObject({ fadeIn: sec(2), fadeOut: sec(1) });
   });

@@ -1,4 +1,5 @@
 import {
+  audioRenderKey,
   bakeKey,
   buildComposition,
   compositionForWindow,
@@ -8,7 +9,7 @@ import {
   type Composition,
 } from '../composition';
 import { makeMainClip } from '../defaults';
-import { addAudio, addText, insertMainClips, setMuteMain, setSpeed, setTransition, setVolume } from '../ops';
+import { addAudio, addText, insertMainClips, setFades, setMuteMain, setSpeed, setTransition, setVolume } from '../ops';
 import { sec } from '../time';
 import type { Project } from '../types';
 import { audioAsset, imageAsset, projectWith, resolve, videoAsset } from './fixtures';
@@ -166,5 +167,66 @@ describe('janelas de decodificação', () => {
     expect(compositionSignature(a)).toBe(compositionSignature(b));
     const c = buildComposition(setVolume(p, p.main[0]!.id, 0.5), { resolve }).composition;
     expect(compositionSignature(c)).not.toBe(compositionSignature(a));
+  });
+});
+
+describe('fades (áudio processado por clipe)', () => {
+  it('sem o WAV pronto: pede o processamento e toca o som original', () => {
+    let p = projectWith(4);
+    p = setFades(p, p.main[0]!.id, sec(1), 0);
+    const { composition, missingAudio } = buildComposition(p, { resolve });
+    expect(missingAudio).toEqual([expect.objectContaining({ fadeIn: sec(1), fadeOut: 0, sourceIn: 0, sourceOut: sec(4) })]);
+    expect(composition!.items).toEqual([expect.objectContaining({ audio: { volume: 1 } })]);
+  });
+
+  it('com o WAV pronto: vídeo mudo e o som vem do arquivo processado', () => {
+    let p = projectWith(4);
+    p = setFades(p, p.main[0]!.id, sec(1), sec(1));
+    const key = audioRenderKey(p.main[0]!);
+    p = { ...p, audioRenders: { [key]: { key, file: 'rendered/a.wav' } } };
+    const { composition, missingAudio } = buildComposition(p, { resolve });
+    expect(missingAudio).toEqual([]);
+    expect(composition!.items).toHaveLength(2);
+    expect(composition!.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ audio: false }),
+        expect.objectContaining({ kind: 'audio', path: '/data/p1/rendered/a.wav', startTime: 0, duration: 4 }),
+      ]),
+    );
+  });
+
+  it('com velocidade e fade: a cópia acelerada é só do vídeo', () => {
+    let p = projectWith(10);
+    p = setSpeed(p, p.main[0]!.id, 2, true);
+    p = setFades(p, p.main[0]!.id, sec(0.5), 0);
+    const { missing, missingAudio } = buildComposition(p, { resolve });
+    expect(missing).toEqual([expect.objectContaining({ needsVideo: true, needsAudio: false })]);
+    expect(missingAudio).toHaveLength(1);
+  });
+
+  it('música com fade usa o WAV processado', () => {
+    const music = audioAsset(30);
+    let { project: p, id } = addAudio(projectWith(10), music, 0, 'import', 'Música');
+    p = setFades(p, id, 0, sec(2));
+    const clip = p.audios[0]!;
+    const key = audioRenderKey(clip);
+    p = { ...p, audioRenders: { [key]: { key, file: 'rendered/m.wav' } } };
+    const items = buildComposition(p, { resolve }).composition!.items;
+    expect(items[1]).toEqual(expect.objectContaining({ kind: 'audio', id, path: '/data/p1/rendered/m.wav', startTime: 0, duration: 10 }));
+  });
+});
+
+describe('volume acima de 100%', () => {
+  it('pede o WAV com ganho e nunca manda volume acima de 1 ao motor', () => {
+    let p = projectWith(4);
+    p = setVolume(p, p.main[0]!.id, 1.5);
+    const { composition, missingAudio } = buildComposition(p, { resolve });
+    expect(missingAudio).toEqual([expect.objectContaining({ gain: 1.5 })]);
+    expect(composition!.items[0]).toEqual(expect.objectContaining({ audio: { volume: 1 } }));
+    const key = audioRenderKey(p.main[0]!);
+    expect(key).toContain('g1.5');
+    p = { ...p, audioRenders: { [key]: { key, file: 'rendered/g.wav' } } };
+    const items = buildComposition(p, { resolve }).composition!.items;
+    expect(items).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'audio', path: '/data/p1/rendered/g.wav', volume: 1 })]));
   });
 });
