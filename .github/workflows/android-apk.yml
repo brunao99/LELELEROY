@@ -1,0 +1,81 @@
+# Gera o APK do Bobina (Android, arm64) a cada mudança no app e guarda como
+# artefato da execução, para baixar direto no celular. Também dá para rodar à
+# mão em Actions > APK Android > Run workflow.
+name: APK Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'claude/**']
+    paths:
+      - 'bobina/**'
+      - '.github/workflows/android-apk.yml'
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: Gerar APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: bobina
+    steps:
+      - name: Liberar espaço em disco
+        working-directory: /
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/share/swift /opt/hostedtoolcache/CodeQL
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: bobina/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Tipos, testes e lint
+        run: |
+          npx tsc --noEmit
+          npx jest --silent
+          npx eslint .
+
+      - name: Gerar o projeto Android
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: 1
+          EXPO_NO_TELEMETRY: 1
+
+      - name: Compilar o APK
+        working-directory: bobina/android
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" --no-daemon
+        env:
+          NODE_ENV: production
+
+      - name: Dar nome ao APK
+        run: |
+          version=$(node -p "require('./app.json').expo.version")
+          cp android/app/build/outputs/apk/release/app-release.apk "Bobina-${version}-${{ github.run_number }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bobina-APK-${{ github.run_number }}
+          path: bobina/Bobina-*.apk
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: error
