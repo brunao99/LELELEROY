@@ -117,9 +117,19 @@ export function usePreviewPlayer({ composition, duration, plan, resources, width
     const resume = resumePlaying.current;
     runOnUI(() => {
       'worklet';
-      extractor.prepare();
-      extractor.seekTo(start);
-      if (resume) extractor.play();
+      // No Android, preparar exige um contexto OpenGL ativo nesta thread; uma
+      // superfície do Skia garante que ele exista antes do primeiro desenho.
+      const ui = globalThis as unknown as { __bobinaGL?: SkSurface | null };
+      if (!ui.__bobinaGL) ui.__bobinaGL = Skia.Surface.MakeOffscreen(16, 16);
+      try {
+        extractor.prepare();
+        extractor.seekTo(start);
+        if (resume) extractor.play();
+      } catch (e) {
+        // Um erro aqui fecharia o app; vira aviso no preview.
+        scheduleOnRN(setRuntimeError, String(e));
+        return;
+      }
       active.set(extractor);
       switching.set(false);
       dirtyFrames.set(IDLE_REDRAW_FRAMES);

@@ -3,6 +3,7 @@
  * depois não quebra o projeto.
  */
 import { __RNSkiaVideoPrivateAPI } from '@azzapp/react-native-skia-video';
+import { Skia, type SkSurface } from '@shopify/react-native-skia';
 import { Directory, File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { getAudioDuration } from 'react-native-audio-api';
@@ -78,6 +79,12 @@ export function probeFirstFrame(path: string, timeoutMs = 10_000): Promise<{ wid
       'worklet';
       let extractor: ReturnType<typeof __RNSkiaVideoPrivateAPI.createVideoCompositionFramesExtractorSync> | null = null;
       try {
+        // No Android o extrator precisa de um contexto OpenGL ativo nesta thread
+        // ("Skia context is not initialized"); uma superfície do Skia cria esse
+        // contexto. Fica guardada no runtime para as próximas leituras.
+        const cache = globalThis as unknown as { __probeSurface?: SkSurface | null };
+        if (!cache.__probeSurface) cache.__probeSurface = Skia.Surface.MakeOffscreen(16, 16);
+        if (!cache.__probeSurface) throw new Error('sem contexto de desenho');
         extractor = __RNSkiaVideoPrivateAPI.createVideoCompositionFramesExtractorSync({
           duration: 0.5,
           items: [{ id: 'probe', path, compositionStartTime: 0, startTime: 0, duration: 0.5 }],
