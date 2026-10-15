@@ -14,7 +14,9 @@ export const Filmstrip = memo(function Filmstrip({
   projectId,
   asset,
   sourceIn,
+  sourceOut,
   speed,
+  reverse,
   width,
   height,
   pps,
@@ -22,7 +24,9 @@ export const Filmstrip = memo(function Filmstrip({
   projectId: string;
   asset: MediaAsset;
   sourceIn: Micros;
+  sourceOut: Micros;
   speed: number;
+  reverse: boolean;
   width: number;
   height: number;
   pps: number;
@@ -34,10 +38,11 @@ export const Filmstrip = memo(function Filmstrip({
     const out: Micros[] = [];
     for (let i = 0; i < count; i++) {
       const timelineOffset = ((i * tileW) / pps) * 1_000_000;
-      out.push(thumbTime(sourceIn + timelineOffset * speed));
+      // De trás para frente, as miniaturas também vêm do fim para o começo.
+      out.push(thumbTime(reverse ? Math.max(sourceIn, sourceOut - timelineOffset * speed) : sourceIn + timelineOffset * speed));
     }
     return out;
-  }, [count, tileW, pps, sourceIn, speed]);
+  }, [count, tileW, pps, sourceIn, sourceOut, speed, reverse]);
   const [uris, setUris] = useState<Record<number, string>>({});
 
   useEffect(() => {

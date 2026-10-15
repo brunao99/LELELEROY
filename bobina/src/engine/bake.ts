@@ -8,7 +8,7 @@ import { BlendMode, FilterMode, MipmapMode, Skia, type SkSurface } from '@shopif
 import { Directory } from 'expo-file-system';
 import { createSynchronizable, createWorkletRuntime, runOnRuntime, scheduleOnRN, type WorkletRuntime } from 'react-native-worklets';
 
-import { applyFades, applyGain, changeSpeed, encodeWav, sliceSeconds } from '@/core/audio';
+import { applyFades, applyGain, changeSpeed, encodeWav, reversePcm, sliceSeconds } from '@/core/audio';
 import type { AudioRenderRequest, BakeRequest } from '@/core/composition';
 import { displaySize } from '@/core/geometry';
 import type { AudioRender, Bake, MediaAsset, Project } from '@/core/types';
@@ -24,6 +24,13 @@ import { encoderConfig } from './exporter';
  */
 const BAKE_FPS = 60;
 const BAKE_MAX_SIDE = 3840;
+/**
+ * A cópia invertida guarda um bloco de quadros na memória antes de gravá-los ao
+ * contrário (o decodificador só anda para frente). Por isso fica em até 1440p e
+ * os blocos cabem em ~190 MB.
+ */
+const REVERSE_MAX_SIDE = 2560;
+const REVERSE_BLOCK_BYTES = 190_000_000;
 
 let runtime: WorkletRuntime | null = null;
 function bakeRuntime(): WorkletRuntime {
@@ -35,15 +42,51 @@ function bakeName(request: BakeRequest): string {
   return request.key.replace(/[^a-zA-Z0-9@._-]/g, '_');
 }
 
-/** Tamanho da cópia: em pé (rotação aplicada), até 1920 no lado maior, par. */
-function bakeSize(asset: MediaAsset): { width: number; height: number } {
+/** Tamanho da cópia: em pé (rotação aplicada), até o limite no lado maior, par. */
+function bakeSize(asset: MediaAsset, maxSide = BAKE_MAX_SIDE): { width: number; height: number } {
   const size = displaySize(asset);
-  const k = Math.min(1, BAKE_MAX_SIDE / Math.max(size.width, size.height));
+  const k = Math.min(1, maxSide / Math.max(size.width, size.height));
   const even = (n: number) => Math.max(2, Math.round((n * k) / 2) * 2);
   return { width: even(size.width), height: even(size.height) };
 }
 
-/** Recodifica o trecho [from, to] da mídia tocando `speed` vezes mais rápido. Sem áudio. */
+/** Desenha o quadro em pé, ocupando a superfície inteira. */
+function drawUpright(
+  canvas: ReturnType<SkSurface['getCanvas']>,
+  frame: { texture: unknown; width: number; height: number; rotation: number } | undefined,
+  width: number,
+  height: number,
+) {
+  'worklet';
+  canvas.drawColor(Skia.Color('#000000'), BlendMode.Src);
+  if (!frame || !frame.texture) return;
+  const image = Skia.Image.MakeImageFromNativeTextureUnstable(frame.texture as never, frame.width, frame.height);
+  const r = ((Math.round(frame.rotation / 90) * 90) % 360 + 360) % 360;
+  const turned = r === 90 || r === 270;
+  const dispW = turned ? frame.height : frame.width;
+  const dispH = turned ? frame.width : frame.height;
+  canvas.save();
+  canvas.scale(width / dispW, height / dispH);
+  if (r === 90) {
+    canvas.translate(frame.height, 0);
+    canvas.rotate(90, 0, 0);
+  } else if (r === 180) {
+    canvas.translate(frame.width, frame.height);
+    canvas.rotate(180, 0, 0);
+  } else if (r === 270) {
+    canvas.translate(0, frame.width);
+    canvas.rotate(270, 0, 0);
+  }
+  const rect = Skia.XYWHRect(0, 0, frame.width, frame.height);
+  canvas.drawImageRectOptions(image, rect, rect, FilterMode.Linear, MipmapMode.None, Skia.Paint());
+  canvas.restore();
+  image.dispose();
+}
+
+/**
+ * Recodifica o trecho [from, to] da mídia tocando `speed` vezes mais rápido, e
+ * de trás para frente se pedido. Sem áudio.
+ */
 function bakeVideo(
   sourcePath: string,
   outPath: string,
@@ -59,6 +102,9 @@ function bakeVideo(
     items: [{ id: 'src', path: sourcePath, compositionStartTime: 0, startTime: request.from / 1_000_000, duration: sourceSeconds }],
   };
   const speed = request.speed;
+  const reverse = request.reverse;
+  const fromSeconds = request.from / 1_000_000;
+  const blockBytes = REVERSE_BLOCK_BYTES;
   return new Promise((resolve, reject) => {
     const cancelled = createSynchronizable(false);
     const onAbort = () => {
@@ -76,7 +122,8 @@ function bakeVideo(
       'worklet';
       const { width, height, fps, bitRate, encoderName } = config;
       let encoder: ReturnType<typeof SkiaVideo.createVideoEncoder> | null = null;
-      const extractor = SkiaVideo.createVideoCompositionFramesExtractorSync(composition);
+      // O caminho invertido abre um extrator por bloco; o normal usa um só.
+      const extractor = reverse ? null : SkiaVideo.createVideoCompositionFramesExtractorSync(composition);
       try {
         const cache = globalThis as unknown as { __bakeSurface?: SkSurface | null; __bakeW?: number; __bakeH?: number };
         let surface = cache.__bakeSurface ?? null;
@@ -93,54 +140,73 @@ function bakeVideo(
           null,
         );
         encoder.prepare();
-        extractor.start();
         const canvas = surface.getCanvas();
         const pooled = SkiaVideo.runWithAutoreleasePool ?? ((fn: () => void) => fn());
         const total = Math.max(1, Math.ceil(outSeconds * fps));
         const target = surface;
         const enc = encoder;
-        for (let i = 0; i < total; i++) {
-          if (cancelled.getDirty()) return;
-          const outT = i / fps;
-          const srcT = Math.min(sourceSeconds - 1e-3, outT * speed);
-          pooled(() => {
-            const frames = extractor.decodeCompositionFrames(srcT);
-            const frame = frames.src;
-            canvas.drawColor(Skia.Color('#000000'), BlendMode.Src);
-            if (frame && frame.texture) {
-              const image = Skia.Image.MakeImageFromNativeTextureUnstable(frame.texture, frame.width, frame.height);
-              const r = ((Math.round(frame.rotation / 90) * 90) % 360 + 360) % 360;
-              const turned = r === 90 || r === 270;
-              const dispW = turned ? frame.height : frame.width;
-              const dispH = turned ? frame.width : frame.height;
-              canvas.save();
-              canvas.scale(width / dispW, height / dispH);
-              if (r === 90) {
-                canvas.translate(frame.height, 0);
-                canvas.rotate(90, 0, 0);
-              } else if (r === 180) {
-                canvas.translate(frame.width, frame.height);
-                canvas.rotate(180, 0, 0);
-              } else if (r === 270) {
-                canvas.translate(0, frame.width);
-                canvas.rotate(270, 0, 0);
+        if (extractor) {
+          extractor.start();
+          for (let i = 0; i < total; i++) {
+            if (cancelled.getDirty()) return;
+            const outT = i / fps;
+            const srcT = Math.min(sourceSeconds - 1e-3, outT * speed);
+            pooled(() => {
+              drawUpright(canvas, extractor.decodeCompositionFrames(srcT).src, width, height);
+              target.flush(true);
+              enc.encodeFrame(target.getNativeTextureUnstable(), outT);
+            });
+            if (i % 10 === 0) scheduleOnRN(onProgress, i / total);
+          }
+        } else {
+          // De trás para frente, em blocos: cada bloco é decodificado para a frente
+          // (com um extrator que começa nele), guardado e gravado ao contrário.
+          const perBlock = Math.max(4, Math.min(48, Math.floor(blockBytes / (width * height * 4))));
+          const srcAt = (i: number) => Math.max(0, Math.min(sourceSeconds - 1e-3, sourceSeconds - 1e-3 - (i / fps) * speed));
+          for (let first = 0; first < total; first += perBlock) {
+            if (cancelled.getDirty()) return;
+            const last = Math.min(total, first + perBlock);
+            const low = srcAt(last - 1);
+            const high = srcAt(first);
+            const span = high - low + 0.25;
+            const block = SkiaVideo.createVideoCompositionFramesExtractorSync({
+              duration: span,
+              items: [{ id: 'src', path: sourcePath, compositionStartTime: 0, startTime: fromSeconds + low, duration: span }],
+            });
+            const shots: ReturnType<SkSurface['makeImageSnapshot']>[] = [];
+            try {
+              block.start();
+              // Do quadro mais antigo para o mais novo (é como o decodificador anda).
+              for (let i = last - 1; i >= first; i--) {
+                const local = srcAt(i) - low;
+                pooled(() => {
+                  drawUpright(canvas, block.decodeCompositionFrames(local).src, width, height);
+                  target.flush(true);
+                  shots.push(target.makeImageSnapshot());
+                });
               }
-              const rect = Skia.XYWHRect(0, 0, frame.width, frame.height);
-              canvas.drawImageRectOptions(image, rect, rect, FilterMode.Linear, MipmapMode.None, Skia.Paint());
-              canvas.restore();
-              image.dispose();
+            } finally {
+              block.dispose();
             }
-            target.flush(true);
-            enc.encodeFrame(target.getNativeTextureUnstable(), outT);
-          });
-          if (i % 10 === 0) scheduleOnRN(onProgress, i / total);
+            // shots[k] é o quadro de saída `last - 1 - k`: grava na ordem da saída.
+            for (let i = first; i < last; i++) {
+              const shot = shots[last - 1 - i]!;
+              pooled(() => {
+                canvas.drawImage(shot, 0, 0);
+                target.flush(true);
+                enc.encodeFrame(target.getNativeTextureUnstable(), i / fps);
+              });
+            }
+            for (const shot of shots) shot.dispose();
+            scheduleOnRN(onProgress, last / total);
+          }
         }
         encoder.finishWriting();
         scheduleOnRN(settle, null);
       } catch (e) {
         scheduleOnRN(settle, String(e));
       } finally {
-        extractor.dispose();
+        extractor?.dispose();
         encoder?.dispose();
       }
     })();
@@ -150,7 +216,8 @@ function bakeVideo(
 /** Processa o áudio do trecho na velocidade pedida e grava um WAV. */
 async function bakeAudio(project: Project, asset: MediaAsset, request: BakeRequest, relative: string) {
   const pcm = await decodeFile(fileUri(project.id, asset.file), 44_100);
-  const piece = sliceSeconds(pcm, request.from / 1_000_000, request.to / 1_000_000);
+  const slice = sliceSeconds(pcm, request.from / 1_000_000, request.to / 1_000_000);
+  const piece = request.reverse ? reversePcm(slice) : slice;
   const sped = changeSpeed(piece, request.speed, request.keepPitch);
   // Fades curtíssimos nas pontas evitam estalos no corte.
   applyFades(sped, 0.005, 0.005);
@@ -189,7 +256,8 @@ export async function runBake(
     const relative = `baked/${name}.mp4`;
     const out = projectFile(project.id, relative);
     if (out.exists) out.delete();
-    await bakeVideo(absolutePath(project.id, asset.file), absolutePath(project.id, relative), job, bakeSize(asset), (f) => onProgress(wantAudio ? f * 0.8 : f), signal);
+    const size = bakeSize(asset, request.reverse ? REVERSE_MAX_SIDE : BAKE_MAX_SIDE);
+    await bakeVideo(absolutePath(project.id, asset.file), absolutePath(project.id, relative), job, size, (f) => onProgress(wantAudio ? f * 0.8 : f), signal);
     videoFile = relative;
   }
   if (wantAudio && !audioFile) {
@@ -203,6 +271,7 @@ export async function runBake(
     assetId: request.assetId,
     speed: request.speed,
     keepPitch: request.keepPitch,
+    reverse: request.reverse || undefined,
     from: range.from,
     to: range.to,
     videoFile,
@@ -226,7 +295,8 @@ export async function runAudioRender(project: Project, request: AudioRenderReque
   if (!asset) throw new Error('Mídia não encontrada.');
   ensureDir(new Directory(projectDir(project.id), 'rendered'));
   const pcm = await decodeFile(fileUri(project.id, asset.file), 44_100);
-  const piece = sliceSeconds(pcm, request.sourceIn / 1_000_000, request.sourceOut / 1_000_000);
+  const slice = sliceSeconds(pcm, request.sourceIn / 1_000_000, request.sourceOut / 1_000_000);
+  const piece = request.reverse ? reversePcm(slice) : slice;
   const timed = request.speed === 1 ? piece : changeSpeed(piece, request.speed, request.keepPitch);
   applyGain(timed, request.gain);
   applyFades(timed, Math.max(0.005, request.fadeIn / 1_000_000), Math.max(0.005, request.fadeOut / 1_000_000));

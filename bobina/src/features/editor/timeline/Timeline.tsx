@@ -429,7 +429,7 @@ function MainClipView({ ctx, slot, slots }: { ctx: RowContext; slot: MainSlot; s
       <View
         accessible
         accessibilityRole="button"
-        accessibilityLabel={`Clipe ${slot.index + 1}, ${formatSeconds(slot.duration)}${clip.speed !== 1 ? `, velocidade ${formatSpeed(clip.speed)}` : ''}${lost ? ', mídia ausente' : ''}`}
+        accessibilityLabel={`Clipe ${slot.index + 1}, ${formatSeconds(slot.duration)}${clip.speed !== 1 ? `, velocidade ${formatSpeed(clip.speed)}` : ''}${clip.reverse ? ', de trás para frente' : ''}${lost ? ', mídia ausente' : ''}`}
         accessibilityState={{ selected }}
         style={[
           styles.clip,
@@ -439,16 +439,26 @@ function MainClipView({ ctx, slot, slots }: { ctx: RowContext; slot: MainSlot; s
         ]}
       >
         {asset && !lost ? (
-          <Filmstrip projectId={project.id} asset={asset} sourceIn={clip.sourceIn} speed={clip.speed} width={width} height={height} pps={pps} />
+          <Filmstrip
+            projectId={project.id}
+            asset={asset}
+            sourceIn={clip.sourceIn}
+            sourceOut={clip.sourceOut}
+            speed={clip.speed}
+            reverse={!!clip.reverse}
+            width={width}
+            height={height}
+            pps={pps}
+          />
         ) : (
           <View style={[StyleSheet.absoluteFill, styles.lost]}>
             <AlertTriangle size={18} color={colors.danger} />
           </View>
         )}
-        {clip.speed !== 1 ? (
+        {clip.speed !== 1 || clip.reverse ? (
           <View style={styles.badge}>
             <Txt variant="xs" weight="700" style={{ color: colors.onAccent, fontSize: 10 }}>
-              {formatSpeed(clip.speed)}
+              {[clip.reverse ? '◀' : '', clip.speed !== 1 ? formatSpeed(clip.speed) : ''].filter(Boolean).join(' ')}
             </Txt>
           </View>
         ) : null}

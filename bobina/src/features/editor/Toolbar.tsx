@@ -13,6 +13,7 @@ import {
   Palette,
   RectangleHorizontal,
   Replace,
+  Rewind,
   Scissors,
   SlidersHorizontal,
   Sparkles,
@@ -24,7 +25,7 @@ import {
 } from 'lucide-react-native';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { addOverlay, addText, duplicateItem, extractAudio, findItem, removeItem, replaceMedia, splitItem } from '@/core/ops';
+import { addOverlay, addText, duplicateItem, extractAudio, findItem, removeItem, replaceMedia, setReverse, splitItem } from '@/core/ops';
 import { layoutMain, mainSlotAt } from '@/core/timeline';
 import type { Project } from '@/core/types';
 import { importAll, pickVisualMedia } from '@/features/media/pick';
@@ -86,6 +87,14 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
   const duplicate = () => {
     if (!selection) return;
     if (!applyAdded((p) => duplicateItem(p, selection.id), selection.kind)) showToast('Este item não pode ser duplicado.');
+  };
+
+  const reversed = !!(found && (found.kind === 'main' || found.kind === 'overlay') && (found.item as { reverse?: boolean }).reverse);
+  const toggleReverse = () => {
+    if (!selection) return;
+    player?.pause();
+    apply((p) => setReverse(p, selection.id, !reversed));
+    showToast(reversed ? 'O clipe voltou a tocar normalmente.' : 'O clipe vai tocar de trás para frente.');
   };
 
   const extract = () => {
@@ -152,6 +161,7 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
       <>
         <ToolbarItem icon={Scissors} label="Dividir" onPress={split} />
         <ToolbarItem icon={Gauge} label="Velocidade" onPress={() => openPanel('speed')} disabled={isPhoto} />
+        <ToolbarItem icon={Rewind} label={reversed ? 'Desinverter' : 'Inverter'} onPress={toggleReverse} disabled={isPhoto} active={reversed} />
         <ToolbarItem icon={Volume2} label="Volume" onPress={() => openPanel('volume')} disabled={!hasSound} />
         <ToolbarItem icon={Sparkles} label="Animação" onPress={() => openPanel('animation')} />
         <ToolbarItem icon={Wand2} label="Filtros" onPress={() => openPanel('filters')} />

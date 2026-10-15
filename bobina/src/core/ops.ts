@@ -149,7 +149,7 @@ export function insertMainClips(project: Project, clips: MainClip[], index: numb
 export type Edge = 'start' | 'end';
 
 function trimSource(
-  clip: { sourceIn: Micros; sourceOut: Micros; speed: number },
+  clip: { sourceIn: Micros; sourceOut: Micros; speed: number; reverse?: boolean },
   asset: MediaAsset | undefined,
   edge: Edge,
   delta: Micros,
@@ -161,6 +161,15 @@ function trimSource(
     const length = sourceOut - sourceIn;
     const next = edge === 'start' ? length - delta : length + delta;
     return { sourceIn: 0, sourceOut: clamp(Math.round(next), MIN_CLIP, MAX_IMAGE_DURATION) };
+  }
+  if (clip.reverse) {
+    // De trás para frente: o começo na timeline é o fim do trecho original.
+    if (edge === 'start') {
+      const next = clamp(Math.round(sourceOut - delta * speed), sourceIn + minSpan, sourceLimit(asset));
+      return { sourceIn, sourceOut: next };
+    }
+    const next = clamp(Math.round(sourceIn - delta * speed), 0, sourceOut - minSpan);
+    return { sourceIn: next, sourceOut };
   }
   if (edge === 'start') {
     const next = clamp(Math.round(sourceIn + delta * speed), 0, sourceOut - minSpan);
@@ -262,6 +271,14 @@ function splitClipRange<T extends MainClip | OverlayClip | AudioClip>(
     const a = { ...clip, sourceIn: 0, sourceOut: local };
     const b = { ...clip, id: newId(clip.id[0]), sourceIn: 0, sourceOut: duration - local };
     return [a, b];
+  }
+  if (clip.reverse) {
+    // De trás para frente: a primeira parte na timeline é o fim do trecho original.
+    const cut = clip.sourceOut - Math.round(local * clip.speed);
+    return [
+      { ...clip, sourceIn: cut },
+      { ...clip, id: newId(clip.id[0]), sourceOut: cut },
+    ];
   }
   const cut = clip.sourceIn + Math.round(local * clip.speed);
   const a = { ...clip, sourceOut: cut };
@@ -482,6 +499,17 @@ export function setSpeed(project: Project, id: string, speed: number, keepPitch:
   return next;
 }
 
+/** Toca o clipe de trás para frente (ou volta ao normal). Só vídeos. */
+export function setReverse(project: Project, id: string, reverse: boolean): Project {
+  const found = findItem(project, id);
+  if (!found || (found.kind !== 'main' && found.kind !== 'overlay')) return project;
+  const clip = found.item as MainClip | OverlayClip;
+  if (project.assets[clip.assetId]?.kind !== 'video' || !!clip.reverse === reverse) return project;
+  const update = <T extends MainClip | OverlayClip>(c: T): T => ({ ...c, reverse: reverse || undefined });
+  if (found.kind === 'main') return withCaptionsWarning(project, mapMain(project, id, update));
+  return mapOverlay(project, id, update);
+}
+
 export const MAX_VOLUME = 2;
 
 export function setVolume(project: Project, id: string, volume: number): Project {
@@ -547,6 +575,7 @@ export function extractAudio(project: Project, id: string): Added | null {
     sourceOut: clip.sourceOut,
     speed: clip.speed,
     keepPitch: clip.keepPitch,
+    ...(clip.reverse ? { reverse: true } : {}),
     volume: clip.volume,
     fadeIn: clip.fadeIn,
     fadeOut: clip.fadeOut,

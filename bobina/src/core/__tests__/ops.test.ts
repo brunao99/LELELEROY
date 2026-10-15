@@ -15,6 +15,7 @@ import {
   rotate90,
   setCaptions,
   setFades,
+  setReverse,
   setSpeed,
   setTransition,
   setTransitionAll,
@@ -330,6 +331,38 @@ describe('substituir mídia', () => {
     const other = videoAsset(2);
     const p = replaceMedia(p0, p0.main[0]!.id, other);
     expect(clipDuration(p.main[0] as MainClip)).toBe(sec(2));
+  });
+});
+
+describe('de trás para frente', () => {
+  const reversed = () => {
+    const p = projectWith(10);
+    return setReverse(p, p.main[0]!.id, true);
+  };
+
+  it('cortar o começo tira do fim do trecho original', () => {
+    const base = reversed();
+    const id = base.main[0]!.id;
+    const p = trimItem(base, id, 'start', sec(2));
+    expect(findItem(p, id)!.item).toMatchObject({ sourceIn: 0, sourceOut: sec(8) });
+    const q = trimItem(p, id, 'end', -sec(3));
+    expect(findItem(q, id)!.item).toMatchObject({ sourceIn: sec(3), sourceOut: sec(8) });
+  });
+
+  it('dividir: a primeira parte é o fim do trecho original', () => {
+    const p = reversed();
+    const r = splitItem(p, p.main[0]!.id, sec(3))!;
+    const [a, b] = r.project.main;
+    expect(a).toMatchObject({ sourceIn: sec(7), sourceOut: sec(10), reverse: true });
+    expect(b).toMatchObject({ sourceIn: 0, sourceOut: sec(7), reverse: true });
+  });
+
+  it('desinverter volta ao normal e o áudio extraído acompanha', () => {
+    const p = reversed();
+    const id = p.main[0]!.id;
+    expect(setReverse(p, id, false).main[0]!.reverse).toBeUndefined();
+    const ex = extractAudio(p, id)!;
+    expect(findItem(ex.project, ex.id)!.item).toMatchObject({ reverse: true });
   });
 });
 

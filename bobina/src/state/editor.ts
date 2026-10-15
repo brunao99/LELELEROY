@@ -136,7 +136,8 @@ async function runPendingBakes() {
   try {
     for (let i = 0; i < bakes.length; i++) {
       const request = bakes[i]!;
-      const label = bakes.length > 1 ? `Aplicando velocidade (${i + 1} de ${bakes.length})` : 'Aplicando velocidade';
+      const what = request.reverse ? 'Invertendo o vídeo' : 'Aplicando velocidade';
+      const label = bakes.length > 1 ? `${what} (${i + 1} de ${bakes.length})` : what;
       useEditor.getState().setBusy({ label, fraction: 0 });
       const current = useEditor.getState().history?.present;
       if (!current || current.id !== project.id) return;

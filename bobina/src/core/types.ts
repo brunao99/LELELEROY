@@ -116,6 +116,8 @@ export interface ClipBase extends AudioProps {
   speed: number;
   /** Manter o tom de voz quando a velocidade muda. */
   keepPitch: boolean;
+  /** Toca o trecho de trás para frente (usa uma cópia invertida, como a velocidade). */
+  reverse?: boolean;
 }
 
 export type TransitionKind =
@@ -254,6 +256,8 @@ export interface Bake {
   assetId: string;
   speed: number;
   keepPitch: boolean;
+  /** Cópia de trás para frente: o começo do arquivo é o fim do trecho. */
+  reverse?: boolean;
   /** Trecho da mídia original que a cópia cobre. */
   from: Micros;
   to: Micros;

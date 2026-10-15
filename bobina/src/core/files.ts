@@ -2,7 +2,7 @@
  * Arquivos do projeto: o que o JSON aponta e o disco não tem mais, e os caches
  * que nenhum clipe usa. Sem acesso ao disco aqui: quem chama diz o que existe.
  */
-import { audioRenderKey, bakeKey, needsAudioRender } from './composition';
+import { audioRenderKey, bakeKey, needsAudioRender, needsBake } from './composition';
 import type { Project } from './types';
 
 /** Mídias que o projeto usa: clipes, sobreposições, áudios e a foto de fundo. */
@@ -45,7 +45,7 @@ export function reconcileFiles(project: Project, exists: (relative: string) => b
  */
 export function unusedCaches(project: Project): { project: Project; files: string[] } {
   const clips = [...project.main, ...project.overlays, ...project.audios];
-  const bakeKeys = new Set(clips.filter((c) => c.speed !== 1).map((c) => bakeKey(c.assetId, c.speed, c.keepPitch)));
+  const bakeKeys = new Set(clips.filter(needsBake).map((c) => bakeKey(c.assetId, c.speed, c.keepPitch, !!c.reverse)));
   const renderKeys = new Set(clips.filter((c) => needsAudioRender(c)).map((c) => audioRenderKey(c)));
   const files: string[] = [];
   const bakes = { ...project.bakes };

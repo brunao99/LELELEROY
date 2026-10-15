@@ -64,17 +64,18 @@ export function captionParts(project: Project, source: CaptionSource): CaptionAu
   if (wantVideo) {
     for (const slot of layoutMain(project)) {
       const asset = project.assets[slot.clip.assetId];
-      if (!asset || asset.kind !== 'video' || !asset.hasAudio) continue;
+      // Fala de trás para frente não tem o que transcrever.
+      if (!asset || asset.kind !== 'video' || !asset.hasAudio || slot.clip.reverse) continue;
       // O som do clipe conta mesmo se estiver baixo; a fala ainda está lá.
       parts.push({ ...pick(slot.clip), start: slot.start });
     }
     for (const o of project.overlays) {
       const asset = project.assets[o.assetId];
-      if (asset?.kind === 'video' && asset.hasAudio && o.volume > 0) parts.push({ ...pick(o), start: o.start });
+      if (asset?.kind === 'video' && asset.hasAudio && o.volume > 0 && !o.reverse) parts.push({ ...pick(o), start: o.start });
     }
   }
   for (const a of project.audios) {
-    const take = (a.source === 'extract' && wantVideo) || (a.source === 'voiceover' && wantVoice);
+    const take = !a.reverse && ((a.source === 'extract' && wantVideo) || (a.source === 'voiceover' && wantVoice));
     if (take) parts.push({ ...pick(a), start: a.start });
   }
   return parts;

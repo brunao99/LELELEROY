@@ -1,4 +1,5 @@
 import {
+  reversePcm,
   applyFades,
   applyGain,
   changeSpeed,
@@ -104,5 +105,13 @@ describe('ganho', () => {
     expect(ch[0]).toBeCloseTo(0.2);
     for (const v of ch) expect(Math.abs(v)).toBeLessThanOrEqual(1);
     expect(ch[2]).toBeLessThan(-0.9);
+  });
+});
+
+describe('inverter', () => {
+  it('o som de trás para frente, em todos os canais', () => {
+    const out = reversePcm({ sampleRate: 4, channels: [new Float32Array([1, 2, 3]), new Float32Array([4, 5, 6])] });
+    expect(Array.from(out.channels[0]!)).toEqual([3, 2, 1]);
+    expect(Array.from(out.channels[1]!)).toEqual([6, 5, 4]);
   });
 });

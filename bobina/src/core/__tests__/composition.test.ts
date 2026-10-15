@@ -9,7 +9,7 @@ import {
   type Composition,
 } from '../composition';
 import { makeMainClip } from '../defaults';
-import { addAudio, addText, insertMainClips, setFades, setMuteMain, setSpeed, setTransition, setVolume } from '../ops';
+import { addAudio, addText, insertMainClips, setFades, setMuteMain, setReverse, setSpeed, setTransition, setVolume } from '../ops';
 import { sec } from '../time';
 import type { Project } from '../types';
 import { audioAsset, imageAsset, projectWith, resolve, videoAsset } from './fixtures';
@@ -127,6 +127,46 @@ describe('buildComposition', () => {
       p = insertMainClips({ ...p, assets: { [v.id]: v } }, [a, b], 0);
       const { missing } = buildComposition(p, { resolve });
       expect(missing).toEqual([expect.objectContaining({ from: sec(2), to: sec(12) })]);
+    });
+  });
+
+  describe('de trás para frente', () => {
+    const reversed = (): Project => {
+      const p = projectWith(10);
+      return setReverse(p, p.main[0]!.id, true);
+    };
+
+    it('mesmo a 1x pede uma cópia invertida, com chave própria', () => {
+      const p = reversed();
+      const { missing } = buildComposition(p, { resolve });
+      expect(missing).toEqual([expect.objectContaining({ reverse: true, speed: 1, from: 0, to: sec(10) })]);
+      const clip = p.main[0]!;
+      expect(missing[0]!.key).toBe(bakeKey(clip.assetId, 1, clip.keepPitch, true));
+      expect(missing[0]!.key).not.toBe(bakeKey(clip.assetId, 1, clip.keepPitch));
+    });
+
+    it('a cópia invertida começa no fim do trecho', () => {
+      let p = reversed();
+      // trecho 2..6 s de uma cópia invertida de 0..10 s: começa 4 s depois do início da cópia
+      p = { ...p, main: [{ ...p.main[0]!, sourceIn: sec(2), sourceOut: sec(6), keepPitch: false }] };
+      const assetId = p.main[0]!.assetId;
+      const key = bakeKey(assetId, 1, false, true);
+      p = {
+        ...p,
+        bakes: { [key]: { key, assetId, speed: 1, keepPitch: false, reverse: true, from: 0, to: sec(10), videoFile: 'baked/r.mp4', audioFile: 'baked/r.wav' } },
+      };
+      const { composition, missing } = buildComposition(p, { resolve });
+      expect(missing).toEqual([]);
+      expect(composition!.items).toEqual([
+        expect.objectContaining({ path: '/data/p1/baked/r.mp4', startTime: 4, duration: 4, audio: false }),
+        expect.objectContaining({ kind: 'audio', path: '/data/p1/baked/r.wav', startTime: 4, duration: 4 }),
+      ]);
+    });
+
+    it('fotos não invertem', () => {
+      const img = imageAsset();
+      const p = insertMainClips({ ...projectWith(), assets: { [img.id]: img } }, [makeMainClip(img)], 0);
+      expect(setReverse(p, p.main[0]!.id, true)).toBe(p);
     });
   });
 });

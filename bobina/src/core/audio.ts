@@ -162,6 +162,11 @@ export function changeSpeed(buffer: PcmBuffer, speed: number, keepPitch: boolean
 }
 
 /** Fades lineares, em segundos, sobre todos os canais (altera o buffer). */
+/** O som de trás para frente. */
+export function reversePcm(buffer: PcmBuffer): PcmBuffer {
+  return { sampleRate: buffer.sampleRate, channels: buffer.channels.map((c) => c.slice().reverse()) };
+}
+
 export function applyFades(buffer: PcmBuffer, fadeInSec: number, fadeOutSec: number): PcmBuffer {
   const n = frameCount(buffer);
   const fi = Math.min(n, Math.round(fadeInSec * buffer.sampleRate));

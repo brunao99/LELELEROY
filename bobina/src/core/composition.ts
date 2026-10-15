@@ -42,6 +42,8 @@ export interface BakeRequest {
   assetId: string;
   speed: number;
   keepPitch: boolean;
+  /** Cópia de trás para frente. */
+  reverse: boolean;
   from: Micros;
   to: Micros;
   /** Precisa do vídeo acelerado (clipes visuais) e/ou do áudio (clipes com som). */
@@ -55,6 +57,7 @@ export interface AudioRenderRequest {
   assetId: string;
   speed: number;
   keepPitch: boolean;
+  reverse: boolean;
   sourceIn: Micros;
   sourceOut: Micros;
   fadeIn: Micros;
@@ -87,14 +90,29 @@ const US = 1_000_000;
  * feita de outro jeito (v2: resolução da mídia e 60 qps); as antigas deixam de
  * servir e são apagadas ao abrir o projeto.
  */
-export function bakeKey(assetId: string, speed: number, keepPitch: boolean): string {
-  return `${assetId}@${speed.toFixed(3)}${keepPitch ? 'p' : ''}~v2`;
+export function bakeKey(assetId: string, speed: number, keepPitch: boolean, reverse = false): string {
+  return `${assetId}@${speed.toFixed(3)}${keepPitch ? 'p' : ''}${reverse ? 'r' : ''}~v2`;
+}
+
+/** O motor só toca para frente e a 1x: outra velocidade ou o inverso pedem uma cópia. */
+export function needsBake(clip: { speed: number; reverse?: boolean }): boolean {
+  return clip.speed !== 1 || !!clip.reverse;
+}
+
+/**
+ * Onde o clipe começa dentro da cópia (segundos). A cópia invertida começa no
+ * fim do trecho original.
+ */
+function bakeOffset(clip: { sourceIn: Micros; sourceOut: Micros; speed: number; reverse?: boolean }, bake: Bake): number {
+  const from = clip.reverse ? bake.to - clip.sourceOut : clip.sourceIn - bake.from;
+  return from / clip.speed / US;
 }
 
 type AudioClipLike = {
   assetId: string;
   speed: number;
   keepPitch: boolean;
+  reverse?: boolean;
   sourceIn: Micros;
   sourceOut: Micros;
   fadeIn: Micros;
@@ -115,15 +133,16 @@ export function audioRenderKey(clip: AudioClipLike): string {
   const parts = [clip.assetId, clip.speed.toFixed(3), clip.keepPitch ? 'p' : '', clip.sourceIn, clip.sourceOut, clip.fadeIn, clip.fadeOut];
   const gain = renderGain(clip);
   if (gain !== 1) parts.push(`g${gain}`);
+  if (clip.reverse) parts.push('r');
   return parts.join('|');
 }
 
 /** Uma cópia serve se for da mesma mídia e velocidade e cobrir o trecho do clipe. */
 export function findBake(
   project: Project,
-  clip: { assetId: string; speed: number; keepPitch: boolean; sourceIn: Micros; sourceOut: Micros },
+  clip: { assetId: string; speed: number; keepPitch: boolean; reverse?: boolean; sourceIn: Micros; sourceOut: Micros },
 ): Bake | undefined {
-  const bake = project.bakes[bakeKey(clip.assetId, clip.speed, clip.keepPitch)];
+  const bake = project.bakes[bakeKey(clip.assetId, clip.speed, clip.keepPitch, !!clip.reverse)];
   if (!bake) return undefined;
   return bake.from <= clip.sourceIn && bake.to >= clip.sourceOut ? bake : undefined;
 }
@@ -190,6 +209,7 @@ function addRenderedAudio(c: Collect, clip: AudioClipLike & { id: string }, star
       assetId: clip.assetId,
       speed: clip.speed,
       keepPitch: clip.keepPitch,
+      reverse: !!clip.reverse,
       sourceIn: clip.sourceIn,
       sourceOut: clip.sourceOut,
       fadeIn: clip.fadeIn,
@@ -212,7 +232,7 @@ function addVisual(c: Collect, clip: MainClip | OverlayClip, start: Micros, audi
   const rendered = audible && needsAudioRender(clip) ? addRenderedAudio(c, clip, start, end, `${clip.id}#a`) : false;
   const fadePending = audible && needsAudioRender(clip) && !rendered;
 
-  if (clip.speed === 1) {
+  if (!needsBake(clip)) {
     items.push({
       id: clip.id,
       path: resolve(asset.file),
@@ -231,7 +251,7 @@ function addVisual(c: Collect, clip: MainClip | OverlayClip, start: Micros, audi
       id: clip.id,
       path: resolve(bake.videoFile),
       compositionStartTime: start / US,
-      startTime: (clip.sourceIn - bake.from) / clip.speed / US,
+      startTime: bakeOffset(clip, bake),
       duration: (end - start) / US,
       ...(resolution ? { resolution } : {}),
       audio: false,
@@ -259,7 +279,7 @@ function addVisual(c: Collect, clip: MainClip | OverlayClip, start: Micros, audi
       id: `${clip.id}#a`,
       path: resolve(bake.audioFile),
       compositionStartTime: start / US,
-      startTime: (clip.sourceIn - bake.from) / clip.speed / US,
+      startTime: bakeOffset(clip, bake),
       duration: (end - start) / US,
       volume: Math.min(1, clip.volume),
     });
@@ -267,10 +287,11 @@ function addVisual(c: Collect, clip: MainClip | OverlayClip, start: Micros, audi
   const needsAudio = audible && !needsAudioRender(clip);
   if (!bake?.videoFile || (needsAudio && !bake?.audioFile)) {
     addRequest(missing, {
-      key: bakeKey(clip.assetId, clip.speed, clip.keepPitch),
+      key: bakeKey(clip.assetId, clip.speed, clip.keepPitch, !!clip.reverse),
       assetId: clip.assetId,
       speed: clip.speed,
       keepPitch: clip.keepPitch,
+      reverse: !!clip.reverse,
       from: clip.sourceIn,
       to: clip.sourceOut,
       needsVideo: true,
@@ -286,7 +307,7 @@ function addAudioItem(c: Collect, clip: AudioClip) {
   const end = Math.min(clip.start + clipDuration(clip), total);
   if (end <= clip.start) return;
   if (needsAudioRender(clip) && addRenderedAudio(c, clip, clip.start, end, clip.id)) return;
-  if (clip.speed === 1) {
+  if (!needsBake(clip)) {
     items.push({
       kind: 'audio',
       id: clip.id,
@@ -305,7 +326,7 @@ function addAudioItem(c: Collect, clip: AudioClip) {
       id: clip.id,
       path: resolve(bake.audioFile),
       compositionStartTime: clip.start / US,
-      startTime: (clip.sourceIn - bake.from) / clip.speed / US,
+      startTime: bakeOffset(clip, bake),
       duration: (end - clip.start) / US,
       volume: Math.min(1, clip.volume),
     });
@@ -313,10 +334,11 @@ function addAudioItem(c: Collect, clip: AudioClip) {
   }
   if (needsAudioRender(clip)) return;
   addRequest(missing, {
-    key: bakeKey(clip.assetId, clip.speed, clip.keepPitch),
+    key: bakeKey(clip.assetId, clip.speed, clip.keepPitch, !!clip.reverse),
     assetId: clip.assetId,
     speed: clip.speed,
     keepPitch: clip.keepPitch,
+    reverse: !!clip.reverse,
     from: clip.sourceIn,
     to: clip.sourceOut,
     needsVideo: false,

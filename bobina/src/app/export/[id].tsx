@@ -126,7 +126,7 @@ export default function ExportScreen() {
       let pending = buildComposition(current, { resolve, unavailable });
       for (let i = 0; i < pending.missing.length; i++) {
         setStage({ kind: 'preparing', label: 'Aplicando velocidade', fraction: 0 });
-        const bake = await runBake(current, pending.missing[i]!, (f) => setStage({ kind: 'preparing', label: 'Aplicando velocidade', fraction: f }), controller.signal);
+        const bake = await runBake(current, pending.missing[i]!, (f) => setStage({ kind: 'preparing', label: pending.missing[i]!.reverse ? 'Invertendo o vídeo' : 'Aplicando velocidade', fraction: f }), controller.signal);
         current = { ...current, bakes: { ...current.bakes, [bake.key]: bake } };
       }
       for (const request of pending.missingAudio) {
