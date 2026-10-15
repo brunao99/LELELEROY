@@ -8,7 +8,7 @@ import { BlendMode, FilterMode, MipmapMode, Skia, type SkSurface } from '@shopif
 import { Directory } from 'expo-file-system';
 import { createSynchronizable, createWorkletRuntime, runOnRuntime, scheduleOnRN, type WorkletRuntime } from 'react-native-worklets';
 
-import { applyFades, applyGain, changeSpeed, encodeWav, reversePcm, sliceSeconds } from '@/core/audio';
+import { applyFades, applyGain, changeSpeed, encodeWav, reversePcm, sliceSeconds, type PcmBuffer } from '@/core/audio';
 import type { AudioRenderRequest, BakeRequest } from '@/core/composition';
 import { displaySize } from '@/core/geometry';
 import type { AudioRender, Bake, MediaAsset, Project } from '@/core/types';
@@ -287,19 +287,31 @@ function shortHash(text: string): string {
 }
 
 /**
+ * O som de um clipe como ele toca na timeline: trecho, sentido, velocidade,
+ * ganho e fades.
+ */
+export async function clipPcm(
+  project: Project,
+  clip: Pick<AudioRenderRequest, 'assetId' | 'sourceIn' | 'sourceOut' | 'speed' | 'keepPitch' | 'reverse' | 'fadeIn' | 'fadeOut' | 'gain'>,
+): Promise<PcmBuffer> {
+  const asset = project.assets[clip.assetId];
+  if (!asset) throw new Error('Mídia não encontrada.');
+  const pcm = await decodeFile(fileUri(project.id, asset.file), 44_100);
+  const slice = sliceSeconds(pcm, clip.sourceIn / 1_000_000, clip.sourceOut / 1_000_000);
+  const piece = clip.reverse ? reversePcm(slice) : slice;
+  const timed = clip.speed === 1 ? piece : changeSpeed(piece, clip.speed, clip.keepPitch);
+  applyGain(timed, clip.gain);
+  applyFades(timed, Math.max(0.005, clip.fadeIn / 1_000_000), Math.max(0.005, clip.fadeOut / 1_000_000));
+  return timed;
+}
+
+/**
  * Áudio de um clipe com fade (e velocidade, se houver), gravado em WAV. O WAV
  * cobre exatamente o trecho do clipe, já no tempo da timeline.
  */
 export async function runAudioRender(project: Project, request: AudioRenderRequest): Promise<AudioRender> {
-  const asset = project.assets[request.assetId];
-  if (!asset) throw new Error('Mídia não encontrada.');
   ensureDir(new Directory(projectDir(project.id), 'rendered'));
-  const pcm = await decodeFile(fileUri(project.id, asset.file), 44_100);
-  const slice = sliceSeconds(pcm, request.sourceIn / 1_000_000, request.sourceOut / 1_000_000);
-  const piece = request.reverse ? reversePcm(slice) : slice;
-  const timed = request.speed === 1 ? piece : changeSpeed(piece, request.speed, request.keepPitch);
-  applyGain(timed, request.gain);
-  applyFades(timed, Math.max(0.005, request.fadeIn / 1_000_000), Math.max(0.005, request.fadeOut / 1_000_000));
+  const timed = await clipPcm(project, request);
   const relative = `rendered/${shortHash(request.key)}.wav`;
   const file = projectFile(project.id, relative);
   if (file.exists) file.delete();

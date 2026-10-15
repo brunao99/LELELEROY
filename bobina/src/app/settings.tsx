@@ -141,7 +141,8 @@ export default function Settings() {
           <Txt variant="sm">{"Ledit's 0.1.0 · projeto pessoal"}</Txt>
           <Txt variant="xs" tone="muted">
             Fontes do texto: {FONT_LICENSES.join(', ')}. Ícones: Lucide (ISC). Motor de vídeo: React Native Skia e
-            react-native-skia-video (MIT). Reconhecimento de fala: whisper.cpp (MIT).
+            react-native-skia-video (MIT). Reconhecimento de fala: whisper.cpp (MIT) e detector de voz Silero (MIT).
+            MP3: lamejs (LGPL-3.0).
           </Txt>
         </View>
       </ScrollView>

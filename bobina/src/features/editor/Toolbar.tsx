@@ -7,6 +7,7 @@ import {
   Copy,
   Crop,
   Diamond,
+  Download,
   Film,
   Gauge,
   ImageIcon,
@@ -51,6 +52,7 @@ import { ToolbarItem } from '@/ui/Button';
 import { colors, layout, space } from '@/ui/theme';
 
 import { useEditorRuntime } from './EditorContext';
+import { useMp3Download } from './useMp3Download';
 
 export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia: () => void }) {
   const selection = useEditor((s) => s.selection);
@@ -61,6 +63,12 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
   const showToast = useEditor((s) => s.showToast);
   const setBusy = useEditor((s) => s.setBusy);
   const { now, player } = useEditorRuntime();
+  const mp3 = useMp3Download(project);
+  const downloadMp3 = () => {
+    if (!selection) return;
+    player?.pause();
+    mp3.download(selection.id).catch(() => {});
+  };
 
   const found = selection ? findItem(project, selection.id) : null;
   const kind = found?.kind ?? null;
@@ -229,6 +237,7 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
           <ToolbarItem icon={SquareDashed} label="Opacidade" onPress={() => openPanel('opacity')} />
         )}
         <ToolbarItem icon={AudioLines} label="Extrair áudio" onPress={extract} disabled={!hasSound || isPhoto} />
+        <ToolbarItem icon={Download} label="Baixar MP3" onPress={downloadMp3} disabled={!hasSound || isPhoto} />
         <ToolbarItem icon={Replace} label="Substituir" onPress={replace} />
         <ToolbarItem icon={Copy} label="Duplicar" onPress={duplicate} />
         <ToolbarItem icon={Trash2} label="Excluir" onPress={remove} danger />
@@ -240,6 +249,7 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
         <ToolbarItem icon={Scissors} label="Dividir" onPress={split} />
         <ToolbarItem icon={Volume2} label="Volume" onPress={() => openPanel('volume')} />
         <ToolbarItem icon={Gauge} label="Velocidade" onPress={() => openPanel('speed')} />
+        <ToolbarItem icon={Download} label="Baixar MP3" onPress={downloadMp3} />
         <ToolbarItem icon={Copy} label="Duplicar" onPress={duplicate} />
         <ToolbarItem icon={Trash2} label="Excluir" onPress={remove} danger />
       </>
@@ -273,6 +283,7 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.items}>
         {items}
       </ScrollView>
+      {mp3.dialog}
     </View>
   );
 }

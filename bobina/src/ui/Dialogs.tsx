@@ -91,7 +91,19 @@ const styles = StyleSheet.create({
  * Progresso de tela cheia com a marca enchendo (importar mídias): é a espera
  * mais visível do app, então ganha a identidade inteira em vez de uma barra.
  */
-export function BrandProgressDialog({ visible, title, fraction, detail }: { visible: boolean; title: string; fraction: number | null; detail?: string }) {
+export function BrandProgressDialog({
+  visible,
+  title,
+  fraction,
+  detail,
+  onCancel,
+}: {
+  visible: boolean;
+  title: string;
+  fraction: number | null;
+  detail?: string;
+  onCancel?: () => void;
+}) {
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={brandStyles.scrim} accessibilityLiveRegion="polite" accessibilityLabel={`${title}${detail ? `, ${detail}` : ''}`}>
@@ -103,6 +115,11 @@ export function BrandProgressDialog({ visible, title, fraction, detail }: { visi
           <Txt variant="sm" tone="muted" align="center" tabular>
             {detail}
           </Txt>
+        ) : null}
+        {onCancel ? (
+          <View style={{ marginTop: space[5] }}>
+            <Button label="Cancelar" variant="ghost" onPress={onCancel} />
+          </View>
         ) : null}
       </View>
     </Modal>
