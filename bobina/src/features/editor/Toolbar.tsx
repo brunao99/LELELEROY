@@ -6,6 +6,7 @@ import {
   Captions,
   Copy,
   Crop,
+  Diamond,
   Film,
   Gauge,
   ImageIcon,
@@ -111,6 +112,13 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
     showToast(reversed ? 'O clipe voltou a tocar normalmente.' : 'O clipe vai tocar de trás para frente.');
   };
 
+  const hasKeyframes = !!(found && (found.item as { keyframes?: unknown[] }).keyframes?.length);
+  const openKeyframes = () => {
+    player?.pause();
+    useEditor.getState().setPlayhead(now());
+    openPanel('keyframes');
+  };
+
   const freeze = async () => {
     if (!selection || kind !== 'main' || asset?.kind !== 'video') return;
     player?.pause();
@@ -207,6 +215,7 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
         {kind === 'main' ? <ToolbarItem icon={Snowflake} label="Congelar" onPress={freeze} disabled={isPhoto} /> : null}
         <ToolbarItem icon={Volume2} label="Volume" onPress={() => openPanel('volume')} disabled={!hasSound} />
         <ToolbarItem icon={Sparkles} label="Animação" onPress={() => openPanel('animation')} />
+        <ToolbarItem icon={Diamond} label="Keyframes" onPress={openKeyframes} active={hasKeyframes} />
         <ToolbarItem icon={Wand2} label="Filtros" onPress={() => openPanel('filters')} />
         <ToolbarItem icon={SlidersHorizontal} label="Ajustar" onPress={() => openPanel('adjust')} />
         <ToolbarItem icon={Crop} label="Enquadrar" onPress={() => openPanel('frame')} />
@@ -236,6 +245,7 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
       <>
         <ToolbarItem icon={Type} label="Editar" onPress={() => openPanel('text')} />
         <ToolbarItem icon={Sparkles} label="Animação" onPress={() => openPanel('animation')} />
+        <ToolbarItem icon={Diamond} label="Keyframes" onPress={openKeyframes} active={hasKeyframes} />
         <ToolbarItem icon={Scissors} label="Dividir" onPress={split} />
         <ToolbarItem icon={Copy} label="Duplicar" onPress={duplicate} />
         <ToolbarItem icon={Trash2} label="Excluir" onPress={remove} danger />

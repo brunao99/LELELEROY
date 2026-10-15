@@ -11,6 +11,7 @@ import type {
   Background,
   BlendKind,
   Crop,
+  Keyframe,
   LoopAnimKind,
   MainClip,
   Micros,
@@ -43,6 +44,7 @@ export interface RenderClip {
   animIn: Anim;
   animOut: Anim;
   blend: BlendKind;
+  keyframes: Keyframe[] | null;
 }
 
 export interface RenderTransition {
@@ -65,6 +67,7 @@ export interface RenderText {
   animIn: Anim;
   animOut: Anim;
   animLoop: LoopAnimKind;
+  keyframes: Keyframe[] | null;
   /** Muda quando o texto ou o estilo mudam: o motor refaz o parágrafo. */
   version: string;
   text: string;
@@ -113,6 +116,7 @@ function renderClip(project: Project, clip: MainClip | OverlayClip, start: Micro
     animIn: clip.animIn,
     animOut: clip.animOut,
     blend: clip.kind === 'overlay' ? clip.blend : 'normal',
+    keyframes: clip.keyframes && clip.keyframes.length > 0 ? clip.keyframes : null,
   };
 }
 
@@ -150,6 +154,7 @@ export function buildRenderPlan(project: Project): RenderPlan {
       animIn: t.animIn,
       animOut: t.animOut,
       animLoop: t.animLoop,
+      keyframes: t.keyframes && t.keyframes.length > 0 ? t.keyframes : null,
       version: styleVersion(t.text, t.style),
       text: t.text,
       style: t.style,

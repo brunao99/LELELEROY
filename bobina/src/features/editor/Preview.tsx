@@ -10,10 +10,10 @@ import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { fitInside } from '@/core/geometry';
-import { findItem, updateTransform } from '@/core/ops';
+import { findItem, itemStateAt, updateTransform } from '@/core/ops';
 import type { RenderPlan } from '@/core/renderPlan';
 import { clipBox, rotatedSize } from '@/core/renderPlan';
-import type { MainClip, OverlayClip, Project, TextItem, Transform } from '@/core/types';
+import type { MainClip, Micros, OverlayClip, Project, TextItem, Transform } from '@/core/types';
 import type { DrawResources } from '@/engine/draw';
 import type { PreviewPlayer } from '@/engine/player';
 import { useEditor } from '@/state/editor';
@@ -28,23 +28,26 @@ interface Box {
   rotation: number;
 }
 
-/** Caixa do item (em pontos do preview), ou null se ele não tem caixa. */
-function selectionBox(project: Project, plan: RenderPlan, res: DrawResources | null, id: string, scale: number): Box | null {
+/** Caixa do item no instante `t` (em pontos do preview), ou null se ele não tem caixa. */
+function selectionBox(project: Project, plan: RenderPlan, res: DrawResources | null, id: string, scale: number, t: Micros): Box | null {
   const found = findItem(project, id);
   if (!found) return null;
   const W = plan.width;
   const H = plan.height;
+  // Com keyframes, a caixa acompanha o estado na agulha.
+  const transform = itemStateAt(project, id, t)?.transform;
+  if (!transform) return null;
   if (found.kind === 'text') {
     const text = found.item as TextItem;
     const parts = res?.texts[id];
     if (!parts) return null;
     const pad = text.style.background ? parts.padding : 0;
     return {
-      cx: (W / 2 + text.transform.x * W) * scale,
-      cy: (H / 2 + text.transform.y * H) * scale,
-      width: (parts.width + pad * 2) * text.transform.scale * scale,
-      height: (parts.height + pad * 2) * text.transform.scale * scale,
-      rotation: text.transform.rotation,
+      cx: (W / 2 + transform.x * W) * scale,
+      cy: (H / 2 + transform.y * H) * scale,
+      width: (parts.width + pad * 2) * transform.scale * scale,
+      height: (parts.height + pad * 2) * transform.scale * scale,
+      rotation: transform.rotation,
     };
   }
   if (found.kind === 'main' || found.kind === 'overlay') {
@@ -52,7 +55,7 @@ function selectionBox(project: Project, plan: RenderPlan, res: DrawResources | n
     const asset = project.assets[clip.assetId];
     if (!asset || asset.kind === 'audio') return null;
     const disp = rotatedSize(asset.width, asset.height, asset.rotation);
-    const box = clipBox(W, H, disp.width * clip.crop.w, disp.height * clip.crop.h, clip.transform);
+    const box = clipBox(W, H, disp.width * clip.crop.w, disp.height * clip.crop.h, transform);
     return { cx: box.cx * scale, cy: box.cy * scale, width: box.width * scale, height: box.height * scale, rotation: box.rotation };
   }
   return null;
@@ -63,7 +66,7 @@ function hitText(project: Project, plan: RenderPlan, res: DrawResources | null, 
   const texts = [...plan.texts].reverse();
   for (const text of texts) {
     if (t < text.start || t >= text.end) continue;
-    const box = selectionBox(project, plan, res, text.id, scale);
+    const box = selectionBox(project, plan, res, text.id, scale, t);
     if (!box) continue;
     const a = (-box.rotation * Math.PI) / 180;
     const dx = x - box.cx;
@@ -87,11 +90,12 @@ export interface PreviewProps {
 const SNAP = 0.015;
 
 /** Estado do gesto de transformação em andamento (só um por vez). */
-const live = { dx: 0, dy: 0, scale: 1, rotation: 0, snapped: false, centerX: false, centerY: false, active: 0 };
+const live = { dx: 0, dy: 0, scale: 1, rotation: 0, snapped: false, centerX: false, centerY: false, active: 0, time: 0 };
 
-function liveBegin() {
+/** Começa um gesto no instante `time` da agulha (onde um keyframe é gravado, se o item tiver). */
+function liveBegin(time: Micros) {
   if (live.active === 0) {
-    Object.assign(live, { dx: 0, dy: 0, scale: 1, rotation: 0, snapped: false, centerX: false, centerY: false });
+    Object.assign(live, { dx: 0, dy: 0, scale: 1, rotation: 0, snapped: false, centerX: false, centerY: false, time });
   }
   live.active += 1;
 }
@@ -120,6 +124,7 @@ interface Guides {
 
 export function Preview({ project, plan, resources, player, onSize, size }: PreviewProps) {
   const selection = useEditor((s) => s.selection);
+  const playhead = useEditor((s) => s.playhead);
   const busy = useEditor((s) => s.busy);
   const applyGesture = useEditor((s) => s.applyGesture);
   const select = useEditor((s) => s.select);
@@ -141,8 +146,8 @@ export function Preview({ project, plan, resources, player, onSize, size }: Prev
 
   const selectedId = selection && (selection.kind === 'text' || selection.kind === 'overlay' || selection.kind === 'main') ? selection.id : null;
   const box = useMemo(
-    () => (selectedId ? selectionBox(project, plan, resources, selectedId, scale) : null),
-    [project, plan, resources, selectedId, scale],
+    () => (selectedId ? selectionBox(project, plan, resources, selectedId, scale, playhead) : null),
+    [project, plan, resources, selectedId, scale, playhead],
   );
 
   // Arrastar, pinça e girar podem acontecer juntos: cada um atualiza a sua parte
@@ -151,9 +156,8 @@ export function Preview({ project, plan, resources, player, onSize, size }: Prev
     if (!selectedId) return;
     const id = selectedId;
     applyGesture(`transform:${id}`, (base) => {
-      const found = findItem(base, id);
-      if (!found) return base;
-      const t0 = (found.item as TextItem | MainClip | OverlayClip).transform;
+      const t0 = itemStateAt(base, id, live.time)?.transform;
+      if (!t0) return base;
       const next: Transform = {
         x: t0.x + live.dx,
         y: t0.y + live.dy,
@@ -164,7 +168,7 @@ export function Preview({ project, plan, resources, player, onSize, size }: Prev
       if (Math.abs(next.x) < SNAP) next.x = 0;
       if (Math.abs(next.y) < SNAP) next.y = 0;
       liveSnap(next.x === 0, next.y === 0);
-      return updateTransform(base, id, next);
+      return updateTransform(base, id, next, live.time);
     });
     const vertical = live.centerX;
     const horizontal = live.centerY;
@@ -172,7 +176,7 @@ export function Preview({ project, plan, resources, player, onSize, size }: Prev
       !vertical && !horizontal ? null : g && g.vertical === vertical && g.horizontal === horizontal ? g : { vertical, horizontal },
     );
   };
-  const begin = liveBegin;
+  const begin = () => liveBegin(Math.round(player.time.get() * 1_000_000));
   const finish = () => {
     if (liveFinish()) {
       setGuides(null);

@@ -31,7 +31,7 @@ Congelar quadro,clipe,could,yes,yes,quadro exato vira foto de 3 s entre as parte
 Reproduzir ao contrário,clipe,could,yes,yes,"cópia invertida em blocos, até 1440p; combina com velocidade"
 Opacidade do clipe,clipe,could,yes,yes,código pronto e compilado; falta testar num aparelho
 Animações de entrada e saída do clipe,clipe,could,yes,yes,10 animações próprias
-Keyframes de posição escala rotação e opacidade,clipe,could,yes,no,fonte 1 e 2
+Keyframes de posição escala rotação e opacidade,clipe,could,yes,yes,"clipes, sobreposições e textos; curva suave ou constante; acompanha cortar, dividir e velocidade"
 Máscaras,clipe,could,yes,no,
 Estabilização,clipe,could,yes,no,difícil: precisa de análise de movimento
 Velocidade constante de 0.1x a 100x,velocidade,must,yes,yes,S05; cópia acelerada feita em segundo plano (o motor toca a 1x)

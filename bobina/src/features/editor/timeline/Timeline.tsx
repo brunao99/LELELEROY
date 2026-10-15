@@ -27,7 +27,7 @@ import {
   type MainSlot,
 } from '@/core/timeline';
 import { findItem, moveItem, moveMainClip, setMuteMain, trimItem, type Edge } from '@/core/ops';
-import type { AudioClip, Caption, ItemRef, Micros, OverlayClip, Project, TextItem } from '@/core/types';
+import type { AudioClip, Caption, ItemRef, Keyframe, Micros, OverlayClip, Project, TextItem } from '@/core/types';
 import type { PreviewPlayer } from '@/engine/player';
 import { useEditor } from '@/state/editor';
 import { Txt } from '@/ui/Text';
@@ -462,6 +462,7 @@ function MainClipView({ ctx, slot, slots }: { ctx: RowContext; slot: MainSlot; s
             </Txt>
           </View>
         ) : null}
+        {clip.keyframes ? <KeyframeMarks keyframes={clip.keyframes} pps={pps} height={height} /> : null}
         {selected ? (
           <>
             <TrimHandle ctx={ctx} id={clip.id} edge="start" height={height} />
@@ -470,6 +471,17 @@ function MainClipView({ ctx, slot, slots }: { ctx: RowContext; slot: MainSlot; s
         ) : null}
       </View>
     </GestureDetector>
+  );
+}
+
+/** Losangos nos instantes dos keyframes de um item. */
+function KeyframeMarks({ keyframes, pps, height }: { keyframes: Keyframe[]; pps: number; height: number }) {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {keyframes.map((k) => (
+        <View key={k.at} style={[styles.keyframe, { left: toPx(k.at, pps) - 5, top: height / 2 - 5 }]} />
+      ))}
+    </View>
   );
 }
 
@@ -578,6 +590,9 @@ function ItemView({ ctx, kind, item }: { ctx: RowContext; kind: RowKind; item: R
         <Txt variant="xs" weight="600" numberOfLines={1} style={{ color: kind === 'audio' || lost ? colors.text : colors.onTrack, paddingHorizontal: 6 }}>
           {lost ? 'Mídia ausente' : itemLabel(kind, item, project)}
         </Txt>
+        {(kind === 'overlay' || kind === 'text') && (item as OverlayClip | TextItem).keyframes ? (
+          <KeyframeMarks keyframes={(item as OverlayClip | TextItem).keyframes!} pps={pps} height={height} />
+        ) : null}
         {selected ? (
           <>
             <TrimHandle ctx={ctx} id={item.id} edge="start" height={height} />
@@ -593,6 +608,15 @@ export const TIMELINE_MIN_CLIP = MIN_CLIP;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  keyframe: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    backgroundColor: colors.text,
+    borderWidth: 1.5,
+    borderColor: colors.onTrack,
+    transform: [{ rotate: '45deg' }],
+  },
   playhead: {
     position: 'absolute',
     top: 0,

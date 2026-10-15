@@ -5,6 +5,15 @@
 import { NO_ANIM, makeAudioClip, makeMainClip, makeOverlayClip, makeTextItem } from './defaults';
 import { newId } from './ids';
 import {
+  keyframeIndexAt,
+  liveState,
+  scaleKeyframes,
+  shiftKeyframes,
+  splitKeyframes,
+  upsertKeyframe,
+  type KeyState,
+} from './keyframes';
+import {
   DEFAULT_IMAGE_DURATION,
   DEFAULT_TEXT_DURATION,
   MAX_IMAGE_DURATION,
@@ -30,6 +39,7 @@ import type {
   Caption,
   CaptionSource,
   CaptionWord,
+  KeyframeEase,
   ExportSettings,
   ItemKind,
   MainClip,
@@ -191,7 +201,12 @@ export function trimItem(project: Project, id: string, edge: Edge, delta: Micros
       const clip = found.item as MainClip;
       const range = trimSource(clip, project.assets[clip.assetId], edge, delta);
       if (range.sourceIn === clip.sourceIn && range.sourceOut === clip.sourceOut) return project;
-      return withCaptionsWarning(project, mapMain(project, id, (c) => ({ ...c, ...range })));
+      // Cortar o começo desloca os keyframes junto com o conteúdo.
+      const shift = edge === 'start' ? clipDuration({ ...clip, ...range }) - clipDuration(clip) : 0;
+      return withCaptionsWarning(
+        project,
+        mapMain(project, id, (c) => ({ ...c, ...range, keyframes: shiftKeyframes(c.keyframes, shift) })),
+      );
     }
     case 'overlay':
     case 'audio': {
@@ -207,7 +222,11 @@ export function trimItem(project: Project, id: string, edge: Edge, delta: Micros
       const newDuration = clipDuration({ ...clip, ...range });
       const start = edge === 'start' ? clip.start + (oldDuration - newDuration) : clip.start;
       if (range.sourceIn === clip.sourceIn && range.sourceOut === clip.sourceOut) return project;
-      const update = (c: OverlayClip | AudioClip) => ({ ...c, ...range, start: Math.max(0, start) });
+      const shift = edge === 'start' ? newDuration - oldDuration : 0;
+      const update = (c: OverlayClip | AudioClip) =>
+        c.kind === 'overlay'
+          ? { ...c, ...range, start: Math.max(0, start), keyframes: shiftKeyframes(c.keyframes, shift) }
+          : { ...c, ...range, start: Math.max(0, start) };
       return found.kind === 'overlay'
         ? mapOverlay(project, id, update as (c: OverlayClip) => OverlayClip)
         : mapAudio(project, id, update as (c: AudioClip) => AudioClip);
@@ -219,7 +238,7 @@ export function trimItem(project: Project, id: string, edge: Edge, delta: Micros
       if (edge === 'start') {
         const start = clamp(text.start + delta, Math.max(0, prevEnd), end - MIN_CLIP);
         if (start === text.start) return project;
-        return mapText(project, id, (t) => ({ ...t, start, duration: end - start }));
+        return mapText(project, id, (t) => ({ ...t, start, duration: end - start, keyframes: shiftKeyframes(t.keyframes, text.start - start) }));
       }
       const duration = clamp(text.duration + delta, MIN_CLIP, nextStart - text.start);
       if (duration === text.duration) return project;
@@ -300,8 +319,9 @@ export function splitItem(project: Project, id: string, t: Micros): Added | null
       if (local < MIN_CLIP || slot.duration - local < MIN_CLIP) return null;
       const clip = slot.clip;
       const [a0, b0] = splitClipRange(clip, project.assets[clip.assetId], local);
-      const a: MainClip = { ...a0, transitionOut: null, animOut: { ...NO_ANIM }, fadeOut: 0 };
-      const b: MainClip = { ...b0, animIn: { ...NO_ANIM }, fadeIn: 0 };
+      const [ka, kb] = splitKeyframes(clip.keyframes, local);
+      const a: MainClip = { ...a0, transitionOut: null, animOut: { ...NO_ANIM }, fadeOut: 0, keyframes: ka };
+      const b: MainClip = { ...b0, animIn: { ...NO_ANIM }, fadeIn: 0, keyframes: kb };
       const main = [...project.main];
       main.splice(slot.index, 1, a, b);
       return { project: { ...project, main }, id: b.id };
@@ -313,8 +333,9 @@ export function splitItem(project: Project, id: string, t: Micros): Added | null
       const duration = clipDuration(clip);
       if (local < MIN_CLIP || duration - local < MIN_CLIP) return null;
       const [a0, b0] = splitClipRange(clip, project.assets[clip.assetId], local);
-      const a = { ...a0, fadeOut: 0 };
-      const b = { ...b0, fadeIn: 0, start: clip.start + clipDuration(a0) };
+      const [ka, kb] = clip.kind === 'overlay' ? splitKeyframes(clip.keyframes, local) : [undefined, undefined];
+      const a = { ...a0, fadeOut: 0, ...(ka ? { keyframes: ka } : {}) };
+      const b = { ...b0, fadeIn: 0, start: clip.start + clipDuration(a0), ...(kb ? { keyframes: kb } : {}) };
       if (found.kind === 'overlay') {
         const oa = { ...(a as OverlayClip), animOut: { ...NO_ANIM } };
         const ob = { ...(b as OverlayClip), animIn: { ...NO_ANIM } };
@@ -332,13 +353,15 @@ export function splitItem(project: Project, id: string, t: Micros): Added | null
       const text = found.item as TextItem;
       const local = t - text.start;
       if (local < MIN_CLIP || text.duration - local < MIN_CLIP) return null;
-      const a: TextItem = { ...text, duration: local, animOut: { ...NO_ANIM } };
+      const [ka, kb] = splitKeyframes(text.keyframes, local);
+      const a: TextItem = { ...text, duration: local, animOut: { ...NO_ANIM }, keyframes: ka };
       const b: TextItem = {
         ...text,
         id: newId('t'),
         start: text.start + local,
         duration: text.duration - local,
         animIn: { ...NO_ANIM },
+        keyframes: kb,
       };
       const i = project.texts.findIndex((c) => c.id === id);
       const texts = [...project.texts];
@@ -487,7 +510,10 @@ export function setSpeed(project: Project, id: string, speed: number, keepPitch:
   if (project.assets[clip.assetId]?.kind === 'image') return project;
   const s = clamp(speed, MIN_SPEED, MAX_SPEED);
   if (s === clip.speed && keepPitch === clip.keepPitch) return project;
-  const update = <T extends MainClip | OverlayClip | AudioClip>(c: T): T => ({ ...c, speed: s, keepPitch });
+  // O mesmo trecho passa a durar clip.speed / s vezes: os keyframes acompanham.
+  const factor = clip.speed / s;
+  const update = <T extends MainClip | OverlayClip | AudioClip>(c: T): T =>
+    c.kind === 'audio' ? { ...c, speed: s, keepPitch } : { ...c, speed: s, keepPitch, keyframes: scaleKeyframes(c.keyframes, factor) };
   if (found.kind === 'main') return withCaptionsWarning(project, mapMain(project, id, update));
   let next = found.kind === 'overlay' ? mapOverlay(project, id, update) : mapAudio(project, id, update);
   const moved = findItem(next, id)!.item as OverlayClip | AudioClip;
@@ -521,15 +547,17 @@ export function insertFreezeFrame(project: Project, id: string, t: Micros, image
   const clip = slot.clip;
   const local = clamp(t - slot.start, 0, slot.duration);
   const base = makeMainClip(image);
+  // Com keyframes, a foto fica parada no estado daquele instante.
+  const state = liveState(clip, clip.opacity, local);
   const freeze: MainClip = {
     ...base,
     sourceIn: 0,
     sourceOut: FREEZE_DURATION,
-    transform: { ...clip.transform },
+    transform: { ...state.transform },
     crop: { ...clip.crop },
     flipH: clip.flipH,
     flipV: clip.flipV,
-    opacity: clip.opacity,
+    opacity: state.opacity,
     filter: clip.filter ? { ...clip.filter } : null,
     adjust: { ...clip.adjust },
   };
@@ -541,8 +569,9 @@ export function insertFreezeFrame(project: Project, id: string, t: Micros, image
     main.splice(slot.index, 1, { ...clip, transitionOut: null }, { ...freeze, transitionOut: clip.transitionOut });
   } else {
     const [a0, b0] = splitClipRange(clip, project.assets[clip.assetId], local);
-    const a: MainClip = { ...a0, transitionOut: null, animOut: { ...NO_ANIM }, fadeOut: 0 };
-    const b: MainClip = { ...b0, animIn: { ...NO_ANIM }, fadeIn: 0 };
+    const [ka, kb] = splitKeyframes(clip.keyframes, local);
+    const a: MainClip = { ...a0, transitionOut: null, animOut: { ...NO_ANIM }, fadeOut: 0, keyframes: ka };
+    const b: MainClip = { ...b0, animIn: { ...NO_ANIM }, fadeIn: 0, keyframes: kb };
     main.splice(slot.index, 1, a, freeze, b);
   }
   const next = normalize({ ...addAssets(project, [image]), main });
@@ -655,9 +684,112 @@ export function updateVisualAll(project: Project, patch: Partial<Visual>): Proje
   return { ...project, main: project.main.map((c) => ({ ...c, ...patch })) };
 }
 
-export function updateTransform(project: Project, id: string, patch: Partial<Transform>): Project {
+// ---------------------------------------------------------------- keyframes
+
+type Animatable = MainClip | OverlayClip | TextItem;
+
+/** Começo do item na timeline (µs), para converter a agulha em tempo do item. */
+export function itemStartTime(project: Project, id: string): Micros | null {
+  const found = findItem(project, id);
+  if (!found) return null;
+  if (found.kind === 'main') return layoutMain(project).find((s) => s.clip.id === id)?.start ?? null;
+  if (found.kind === 'overlay' || found.kind === 'text') return (found.item as OverlayClip | TextItem).start;
+  return null;
+}
+
+function animatable(project: Project, id: string): { kind: 'main' | 'overlay' | 'text'; item: Animatable; start: Micros } | null {
+  const found = findItem(project, id);
+  if (!found || (found.kind !== 'main' && found.kind !== 'overlay' && found.kind !== 'text')) return null;
+  const start = itemStartTime(project, id);
+  if (start === null) return null;
+  return { kind: found.kind, item: found.item as Animatable, start };
+}
+
+function baseOpacity(item: Animatable): number {
+  return item.kind === 'text' ? 1 : item.opacity;
+}
+
+/** Estado do item no instante `t` da timeline (keyframes ou valores fixos). */
+export function itemStateAt(project: Project, id: string, t: Micros): KeyState | null {
+  const a = animatable(project, id);
+  if (!a) return null;
+  return liveState(a.item, baseOpacity(a.item), t - a.start);
+}
+
+function mapAnimatable(project: Project, id: string, kind: 'main' | 'overlay' | 'text', fn: (item: Animatable) => Animatable): Project {
+  if (kind === 'main') return mapMain(project, id, (c) => fn(c) as MainClip);
+  if (kind === 'overlay') return mapOverlay(project, id, (c) => fn(c) as OverlayClip);
+  return mapText(project, id, (c) => fn(c) as TextItem);
+}
+
+/** Põe ou tira um keyframe na agulha. O primeiro guarda o estado atual do item. */
+export function toggleKeyframe(project: Project, id: string, t: Micros): Project {
+  const a = animatable(project, id);
+  if (!a) return project;
+  const local = t - a.start;
+  const state = liveState(a.item, baseOpacity(a.item), local);
+  const list = a.item.keyframes;
+  const i = keyframeIndexAt(list, local);
+  if (i >= 0 && list) {
+    const rest = list.filter((_, j) => j !== i);
+    if (rest.length > 0) return mapAnimatable(project, id, a.kind, (it) => ({ ...it, keyframes: rest }));
+    // Último keyframe: o item fica parado no estado que tinha.
+    return mapAnimatable(project, id, a.kind, (it) => withBase({ ...it, keyframes: undefined }, state));
+  }
+  return mapAnimatable(project, id, a.kind, (it) => ({ ...it, keyframes: upsertKeyframe(list, local, state) }));
+}
+
+function withBase(item: Animatable, state: KeyState): Animatable {
+  if (item.kind === 'text') return { ...item, transform: state.transform };
+  return { ...item, transform: state.transform, opacity: state.opacity };
+}
+
+/** Tira todos os keyframes; o item fica parado no estado do instante `t`. */
+export function clearKeyframes(project: Project, id: string, t: Micros): Project {
+  const a = animatable(project, id);
+  if (!a?.item.keyframes) return project;
+  const state = liveState(a.item, baseOpacity(a.item), t - a.start);
+  return mapAnimatable(project, id, a.kind, (it) => withBase({ ...it, keyframes: undefined }, state));
+}
+
+/** Curva do keyframe na agulha (vale do keyframe até o próximo). */
+export function setKeyframeEase(project: Project, id: string, t: Micros, ease: KeyframeEase): Project {
+  const a = animatable(project, id);
+  const list = a?.item.keyframes;
+  if (!a || !list) return project;
+  const i = keyframeIndexAt(list, t - a.start);
+  if (i < 0 || list[i]!.ease === ease) return project;
+  return mapAnimatable(project, id, a.kind, (it) => ({ ...it, keyframes: list.map((k, j) => (j === i ? { ...k, ease } : k)) }));
+}
+
+/** Opacidade: com keyframes, grava no keyframe da agulha; sem, muda a do item. */
+export function setItemOpacity(project: Project, id: string, opacity: number, t?: Micros): Project {
+  const a = animatable(project, id);
+  if (!a) return project;
+  const value = clamp(opacity, 0, 1);
+  if (a.item.keyframes && t !== undefined) {
+    const local = t - a.start;
+    const state = liveState(a.item, baseOpacity(a.item), local);
+    return mapAnimatable(project, id, a.kind, (it) => ({ ...it, keyframes: upsertKeyframe(it.keyframes, local, { ...state, opacity: value }) }));
+  }
+  if (a.kind === 'text') return project;
+  return updateVisual(project, id, { opacity: value });
+}
+
+/**
+ * Posição, escala e rotação. Com keyframes e com `t`, grava (ou cria) o keyframe
+ * no instante `t` da timeline; sem keyframes, muda o item inteiro.
+ */
+export function updateTransform(project: Project, id: string, patch: Partial<Transform>, t?: Micros): Project {
   const found = findItem(project, id);
   if (!found) return project;
+  const a = animatable(project, id);
+  if (a?.item.keyframes && t !== undefined) {
+    const local = t - a.start;
+    const state = liveState(a.item, baseOpacity(a.item), local);
+    const next: KeyState = { transform: { ...state.transform, ...patch }, opacity: state.opacity };
+    return mapAnimatable(project, id, a.kind, (it) => ({ ...it, keyframes: upsertKeyframe(it.keyframes, local, next) }));
+  }
   if (found.kind === 'text') {
     return mapText(project, id, (t) => ({ ...t, transform: { ...t.transform, ...patch } }));
   }

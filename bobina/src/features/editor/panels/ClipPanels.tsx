@@ -10,14 +10,18 @@ import { NO_ADJUST, IDENTITY_TRANSFORM, FULL_CROP } from '@/core/defaults';
 import { displaySize } from '@/core/geometry';
 import { ANIMATIONS, LOOP_ANIMATIONS } from '@/core/motion';
 import {
+  clearKeyframes,
   flip,
+  itemStateAt,
   rotate90,
   setBlend,
   setFades,
+  setItemOpacity,
   setSpeed,
   MAX_VOLUME,
   setVolume,
   updateText,
+  updateTransform,
   updateVisual,
   updateVisualAll,
 } from '@/core/ops';
@@ -33,6 +37,7 @@ import type {
   Project,
   TextItem,
 } from '@/core/types';
+import { useEditor } from '@/state/editor';
 import { Button, Row } from '@/ui/Button';
 import { ChoiceRow } from '@/ui/Chip';
 import { Panel, SectionLabel } from '@/ui/Panel';
@@ -325,9 +330,12 @@ function centeredCrop(imageAspect: number, aspect: number | null) {
 export function FramePanel({ project }: { project: Project }) {
   const selected = useSelected<MainClip | OverlayClip>(project, ['main', 'overlay']);
   const { apply, endGesture, close } = usePanelActions();
+  const playhead = useEditor((s) => s.playhead);
   const [crop, setCrop] = useState('free');
   if (!selected) return null;
   const { id, item } = selected;
+  // Com keyframes, o zoom mostrado e alterado é o do instante da agulha.
+  const state = itemStateAt(project, id, playhead) ?? { transform: item.transform, opacity: item.opacity };
   const asset = project.assets[item.assetId];
   const size = asset ? displaySize(asset) : { width: 1, height: 1 };
   return (
@@ -349,13 +357,13 @@ export function FramePanel({ project }: { project: Project }) {
       />
       <Slider
         label="Zoom"
-        value={item.transform.scale}
+        value={state.transform.scale}
         min={0.2}
         max={4}
         defaultValue={1}
         scale="log"
         format={(v) => `${Math.round(v * 100)}%`}
-        onChange={(v) => apply((p) => updateVisual(p, id, { transform: { ...item.transform, scale: v } }), { key: `zoom:${id}` })}
+        onChange={(v) => apply((p) => updateTransform(p, id, { scale: v }, playhead), { key: `zoom:${id}` })}
         onCommit={endGesture}
       />
       <Note>Arraste o vídeo no preview para mudar a posição; use dois dedos para girar e aproximar.</Note>
@@ -367,7 +375,14 @@ export function FramePanel({ project }: { project: Project }) {
           size="sm"
           onPress={() => {
             setCrop('free');
-            apply((p) => updateVisual(p, id, { transform: { ...IDENTITY_TRANSFORM }, crop: { ...FULL_CROP }, flipH: false, flipV: false }));
+            apply((p) =>
+              updateVisual(clearKeyframes(p, id, playhead), id, {
+                transform: { ...IDENTITY_TRANSFORM },
+                crop: { ...FULL_CROP },
+                flipH: false,
+                flipV: false,
+              }),
+            );
           }}
         />
       </Row>
@@ -388,19 +403,21 @@ const BLENDS: { value: BlendKind; label: string }[] = [
 export function OpacityPanel({ project, withBlend }: { project: Project; withBlend: boolean }) {
   const selected = useSelected<MainClip | OverlayClip>(project, ['main', 'overlay']);
   const { apply, endGesture, close } = usePanelActions();
+  const playhead = useEditor((s) => s.playhead);
   if (!selected) return null;
   const { id, kind, item } = selected;
+  const opacity = itemStateAt(project, id, playhead)?.opacity ?? item.opacity;
   return (
     <Panel title={withBlend ? 'Mistura' : 'Opacidade'} onDone={close}>
       <Slider
-        label="Opacidade"
-        value={Math.round(item.opacity * 100)}
+        label={item.keyframes ? 'Opacidade (no keyframe da agulha)' : 'Opacidade'}
+        value={Math.round(opacity * 100)}
         min={0}
         max={100}
         defaultValue={100}
         step={1}
         format={(v) => `${Math.round(v)}%`}
-        onChange={(v) => apply((p) => updateVisual(p, id, { opacity: v / 100 }), { key: `opacity:${id}` })}
+        onChange={(v) => apply((p) => setItemOpacity(p, id, v / 100, playhead), { key: `opacity:${id}` })}
         onCommit={endGesture}
       />
       {withBlend && kind === 'overlay' ? (

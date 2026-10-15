@@ -59,6 +59,24 @@ export interface Adjustments {
   vignette: number;
 }
 
+export type KeyframeEase = 'smooth' | 'linear';
+
+/**
+ * Estado do item num instante: posição, escala, rotação e opacidade. `at` é o
+ * tempo desde o começo do item na timeline. Entre dois keyframes o valor é
+ * interpolado com a curva `ease` do keyframe da esquerda.
+ */
+export interface Keyframe {
+  at: Micros;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+  /** 0..1 (multiplica a opacidade do item). */
+  opacity: number;
+  ease: KeyframeEase;
+}
+
 export interface FilterRef {
   id: string;
   /** 0..1 */
@@ -97,6 +115,8 @@ export interface Visual {
   adjust: Adjustments;
   animIn: Anim;
   animOut: Anim;
+  /** Animação por keyframes; quando existe, manda na posição, escala, rotação e opacidade. */
+  keyframes?: Keyframe[];
 }
 
 export interface AudioProps {
@@ -203,6 +223,7 @@ export interface TextItem {
   animIn: Anim;
   animOut: Anim;
   animLoop: LoopAnimKind;
+  keyframes?: Keyframe[];
 }
 
 /** Uma palavra falada, com o tempo dela na timeline. */

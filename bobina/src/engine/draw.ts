@@ -15,6 +15,7 @@ import {
   type SkRuntimeEffect,
 } from '@shopify/react-native-skia';
 
+import { liveState, type KeyState } from '@/core/keyframes';
 import { combine, itemMotion, transitionFrame, type MotionState } from '@/core/motion';
 import {
   activeMainAt,
@@ -93,6 +94,7 @@ function drawClip(
   W: number,
   H: number,
   res: DrawResources,
+  state: KeyState,
 ) {
   'worklet';
   const texW = img.image.width();
@@ -102,8 +104,8 @@ function drawClip(
   const cropY = clip.crop.y * disp.height;
   const cropW = clip.crop.w * disp.width;
   const cropH = clip.crop.h * disp.height;
-  const box = clipBox(W, H, cropW, cropH, clip.transform);
-  const alpha = clip.opacity * motion.opacity;
+  const box = clipBox(W, H, cropW, cropH, state.transform);
+  const alpha = state.opacity * motion.opacity;
   if (alpha <= 0.001 || box.width <= 0 || box.height <= 0) return;
 
   canvas.save();
@@ -277,14 +279,16 @@ export function drawProject(
 
   const ownMotion = (clip: RenderClip) =>
     itemMotion(t - clip.start, clip.end - clip.start, clip.animIn, clip.animOut);
+  // Posição, escala, rotação e opacidade no instante (keyframes ou fixas).
+  const stateOf = (clip: RenderClip) => liveState(clip, clip.opacity, t - clip.start);
 
   if (active.outgoing && active.transition && outgoingImg) {
     const tf = transitionFrame(active.transition.kind, active.progress);
-    drawClip(canvas, active.outgoing.clip, outgoingImg, combine(ownMotion(active.outgoing.clip), tf.a), W, H, res);
+    drawClip(canvas, active.outgoing.clip, outgoingImg, combine(ownMotion(active.outgoing.clip), tf.a), W, H, res, stateOf(active.outgoing.clip));
     if (active.primary && primaryImg) {
       canvas.save();
       if (tf.reveal) clipReveal(canvas, tf.reveal.shape, tf.reveal.amount, W, H);
-      drawClip(canvas, active.primary.clip, primaryImg, combine(ownMotion(active.primary.clip), tf.b), W, H, res);
+      drawClip(canvas, active.primary.clip, primaryImg, combine(ownMotion(active.primary.clip), tf.b), W, H, res, stateOf(active.primary.clip));
       canvas.restore();
     }
     if (tf.flash && tf.flash.alpha > 0) {
@@ -294,13 +298,13 @@ export function drawProject(
       canvas.drawRect(Skia.XYWHRect(0, 0, W, H), flash);
     }
   } else if (active.primary && primaryImg) {
-    drawClip(canvas, active.primary.clip, primaryImg, ownMotion(active.primary.clip), W, H, res);
+    drawClip(canvas, active.primary.clip, primaryImg, ownMotion(active.primary.clip), W, H, res, stateOf(active.primary.clip));
   }
 
   for (const overlay of plan.overlays) {
     if (t < overlay.start || t >= overlay.end) continue;
     const img = take(overlay);
-    if (img) drawClip(canvas, overlay, img, ownMotion(overlay), W, H, res);
+    if (img) drawClip(canvas, overlay, img, ownMotion(overlay), W, H, res, stateOf(overlay));
   }
 
   for (const text of plan.texts) {
@@ -308,7 +312,8 @@ export function drawProject(
     const parts = res.texts[text.id];
     if (!parts) continue;
     const motion = itemMotion(t - text.start, text.end - text.start, text.animIn, text.animOut, text.animLoop);
-    drawText(canvas, parts, text.style, text.transform, motion, W, H);
+    const state = liveState(text, 1, t - text.start);
+    drawText(canvas, parts, text.style, state.transform, { ...motion, opacity: motion.opacity * state.opacity }, W, H);
   }
 
   const caption = captionAt(plan.captions.items, t);

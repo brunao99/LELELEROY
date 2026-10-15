@@ -39,7 +39,8 @@ export type PanelId =
   | 'animation'
   | 'overlay'
   | 'opacity'
-  | 'cover';
+  | 'cover'
+  | 'keyframes';
 
 export interface Toast {
   id: number;
