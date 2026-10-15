@@ -40,7 +40,9 @@ export type PanelId =
   | 'overlay'
   | 'opacity'
   | 'cover'
-  | 'keyframes';
+  | 'keyframes'
+  | 'effects'
+  | 'chroma';
 
 export interface Toast {
   id: number;

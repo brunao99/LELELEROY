@@ -4,6 +4,7 @@
  * rodam a cada quadro, dentro do desenho.
  */
 import { clipColorMatrix, clipShaderParams, type ColorMatrix, type ShaderParams } from './color';
+import { chromaUniforms, type ChromaUniforms } from './effects';
 import { designSize } from './geometry';
 import { clipDuration, layoutMain, projectDuration } from './timeline';
 import type {
@@ -21,6 +22,7 @@ import type {
   TextStyle,
   Transform,
   TransitionKind,
+  VideoEffect,
 } from './types';
 
 export interface RenderClip {
@@ -45,6 +47,8 @@ export interface RenderClip {
   animOut: Anim;
   blend: BlendKind;
   keyframes: Keyframe[] | null;
+  effect: VideoEffect | null;
+  chroma: ChromaUniforms | null;
 }
 
 export interface RenderTransition {
@@ -117,6 +121,8 @@ function renderClip(project: Project, clip: MainClip | OverlayClip, start: Micro
     animOut: clip.animOut,
     blend: clip.kind === 'overlay' ? clip.blend : 'normal',
     keyframes: clip.keyframes && clip.keyframes.length > 0 ? clip.keyframes : null,
+    effect: clip.effect && clip.effect.amount > 0 ? clip.effect : null,
+    chroma: clip.chroma ? chromaUniforms(clip.chroma) : null,
   };
 }
 

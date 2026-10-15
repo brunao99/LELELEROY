@@ -102,6 +102,22 @@ export interface Anim {
 
 export type LoopAnimKind = 'none' | 'pulse' | 'float' | 'blink' | 'wiggle';
 
+/** Efeitos próprios de vídeo, por clipe. */
+export type EffectKind = 'blur' | 'shake' | 'glitch' | 'rgb' | 'grain' | 'pixelate' | 'pulse' | 'flash';
+
+export interface VideoEffect {
+  kind: EffectKind;
+  /** 0..1 */
+  amount: number;
+}
+
+/** Tira uma cor de fundo (tela verde, azul…). Limiares na distância de tom (CbCr), 0..0,5. */
+export interface ChromaKey {
+  color: string;
+  similarity: number;
+  smoothness: number;
+}
+
 export type BlendKind = 'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'add';
 
 export interface Visual {
@@ -117,6 +133,8 @@ export interface Visual {
   animOut: Anim;
   /** Animação por keyframes; quando existe, manda na posição, escala, rotação e opacidade. */
   keyframes?: Keyframe[];
+  effect?: VideoEffect | null;
+  chroma?: ChromaKey | null;
 }
 
 export interface AudioProps {

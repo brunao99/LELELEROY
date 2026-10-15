@@ -10,7 +10,7 @@ import type { Project } from '@/core/types';
 import { fileUri } from '@/storage/paths';
 
 import type { DrawResources } from './draw';
-import { gradeEffect } from './shaders';
+import { fxEffect, gradeEffect } from './shaders';
 import { buildTextParts, type TextParts } from './text';
 
 /** Largura máxima de uma linha de texto, em fração da largura do quadro. */
@@ -134,6 +134,6 @@ export function useDrawResources(
       );
     }
     prune(captionCache, usedCaptions);
-    return { images, texts, captions, grade: gradeEffect() };
+    return { images, texts, captions, grade: gradeEffect(), fx: fxEffect() };
   }, [plan, provider, images]);
 }

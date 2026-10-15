@@ -72,7 +72,7 @@ Ajustes de realces sombras nitidez vinheta e matiz,filtros,should,yes,yes,S11; s
 Aplicar filtro ou ajuste a todos os clipes,filtros,should,yes,yes,código pronto e compilado; falta testar num aparelho
 Filtro ou ajuste como camada num trecho da timeline,filtros,could,yes,no,
 Roda de cores,filtros,could,yes,no,fonte 1
-Efeitos de vídeo (glitch desfoque etc.),efeitos,could,yes,no,feitos do zero
+Efeitos de vídeo (glitch desfoque etc.),efeitos,could,yes,yes,"8 efeitos próprios: desfoque, tremida, glitch, RGB, VHS, pixelado, pulsar e flash"
 Transição entre dois clipes com duração ajustável,transições,must,yes,yes,S12; código pronto e compilado; falta testar num aparelho
 Conjunto básico: dissolver fade deslizar e zoom,transições,must,yes,yes,feitas do zero; 12 transições próprias
 Aplicar a transição a todos os cortes,transições,should,yes,yes,código pronto e compilado; falta testar num aparelho
@@ -81,7 +81,7 @@ Fundo com cor desfoque ou imagem,formato,should,yes,yes,S14; código pronto e co
 Reenquadrar mantendo o assunto,formato,could,yes,no,fonte 1; precisa de detecção automática
 Sobreposição de vídeo ou foto sobre o principal,sobreposição,should,yes,yes,S18; código pronto e compilado; falta testar num aparelho
 Modos de mistura,sobreposição,could,yes,yes,7 modos
-Chroma key,sobreposição,could,yes,no,fonte 5
+Chroma key,sobreposição,could,yes,yes,"tela verde, azul ou outra cor; intensidade e suavidade da borda; clipes e sobreposições"
 Exportar MP4 para a galeria,exportação,must,yes,yes,S17; H.264 + AAC
 Escolher a resolução (720p 1080p e 2K/4K conforme o aparelho),exportação,must,yes,yes,fonte 4; ajustada ao codificador do aparelho no Android
 Progresso e cancelar a exportação,exportação,must,yes,yes,S17; código pronto e compilado; falta testar num aparelho

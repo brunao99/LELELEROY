@@ -25,7 +25,7 @@ import { runAudioRender, runBake } from '@/engine/bake';
 import { ExportCancelled, encoderConfig, renderVideo } from '@/engine/exporter';
 import { FONT_SOURCES } from '@/engine/fonts';
 import { buildAllText, imageAssetIds, loadImages } from '@/engine/resources';
-import { gradeEffect } from '@/engine/shaders';
+import { fxEffect, gradeEffect } from '@/engine/shaders';
 import { absolutePath, ensureDir, exportsDir, toPlainPath } from '@/storage/paths';
 import { pauseBackgroundWork, useEditor } from '@/state/editor';
 import { checkProjectFiles, loadProject, saveProject } from '@/storage/projects';
@@ -165,7 +165,7 @@ export default function ExportScreen() {
         bitRate: exportBitRate(size, settings.fps),
         composition,
         plan,
-        resources: { images, texts, captions, grade: gradeEffect() },
+        resources: { images, texts, captions, grade: gradeEffect(), fx: fxEffect() },
         onProgress: (done, total) => setStage({ kind: 'rendering', fraction: done / total }),
         signal: controller.signal,
       });

@@ -15,6 +15,7 @@ import {
   type SkRuntimeEffect,
 } from '@shopify/react-native-skia';
 
+import { blurSigma, effectMotion, shaderKind } from '@/core/effects';
 import { liveState, type KeyState } from '@/core/keyframes';
 import { combine, itemMotion, transitionFrame, type MotionState } from '@/core/motion';
 import {
@@ -38,6 +39,8 @@ export interface DrawResources {
   /** Parágrafos das legendas, por id da legenda. */
   captions: Record<string, TextParts>;
   grade: SkRuntimeEffect | null;
+  /** Efeitos e chroma key (engine/shaders.ts). */
+  fx: SkRuntimeEffect | null;
 }
 
 interface ClipImage {
@@ -95,6 +98,7 @@ function drawClip(
   H: number,
   res: DrawResources,
   state: KeyState,
+  seconds: number,
 ) {
   'worklet';
   const texW = img.image.width();
@@ -121,12 +125,39 @@ function drawClip(
   paint.setAntiAlias(true);
   paint.setAlphaf(alpha);
   if (clip.blend !== 'normal') paint.setBlendMode(BLEND[clip.blend]);
-  if (clip.shader && res.grade) {
-    const imageShader = img.image.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Linear, MipmapMode.None);
-    const shader = res.grade.makeShaderWithChildren(
-      gradeUniforms(texW, texH, clip.colorMatrix, clip.shader),
-      [imageShader],
-    );
+  const effect = clip.effect;
+  if (effect?.kind === 'blur') {
+    const sigma = blurSigma(effect.amount, Math.max(texW, texH));
+    paint.setImageFilter(Skia.ImageFilter.MakeBlur(sigma, sigma, TileMode.Clamp, null));
+  }
+  const fxKind = shaderKind(effect?.kind);
+  const useFx = !!res.fx && (fxKind > 0 || !!clip.chroma);
+  if ((clip.shader && res.grade) || useFx) {
+    // Efeitos e chroma primeiro (sobre a cor original), depois a correção de cor.
+    let shader = img.image.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Linear, MipmapMode.None);
+    if (useFx && res.fx) {
+      const key = clip.chroma;
+      shader = res.fx.makeShaderWithChildren(
+        [
+          texW,
+          texH,
+          seconds,
+          fxKind,
+          effect?.amount ?? 0,
+          key ? 1 : 0,
+          key?.cb ?? 0,
+          key?.cr ?? 0,
+          key?.similarity ?? 0,
+          key?.smoothness ?? 0,
+        ],
+        [shader],
+      );
+    }
+    if (clip.shader && res.grade) {
+      shader = res.grade.makeShaderWithChildren(gradeUniforms(texW, texH, clip.colorMatrix, clip.shader), [shader]);
+    } else if (clip.colorMatrix) {
+      paint.setColorFilter(Skia.ColorFilter.MakeMatrix(clip.colorMatrix));
+    }
     paint.setShader(shader);
     canvas.drawRect(Skia.XYWHRect(0, 0, texW, texH), paint);
   } else {
@@ -278,17 +309,21 @@ export function drawProject(
   drawBackground(canvas, plan, bgSource, W, H, res);
 
   const ownMotion = (clip: RenderClip) =>
-    itemMotion(t - clip.start, clip.end - clip.start, clip.animIn, clip.animOut);
+    combine(
+      itemMotion(t - clip.start, clip.end - clip.start, clip.animIn, clip.animOut),
+      effectMotion(clip.effect?.kind, clip.effect?.amount ?? 0, (t - clip.start) / 1_000_000),
+    );
+  const secondsIn = (clip: RenderClip) => (t - clip.start) / 1_000_000;
   // Posição, escala, rotação e opacidade no instante (keyframes ou fixas).
   const stateOf = (clip: RenderClip) => liveState(clip, clip.opacity, t - clip.start);
 
   if (active.outgoing && active.transition && outgoingImg) {
     const tf = transitionFrame(active.transition.kind, active.progress);
-    drawClip(canvas, active.outgoing.clip, outgoingImg, combine(ownMotion(active.outgoing.clip), tf.a), W, H, res, stateOf(active.outgoing.clip));
+    drawClip(canvas, active.outgoing.clip, outgoingImg, combine(ownMotion(active.outgoing.clip), tf.a), W, H, res, stateOf(active.outgoing.clip), secondsIn(active.outgoing.clip));
     if (active.primary && primaryImg) {
       canvas.save();
       if (tf.reveal) clipReveal(canvas, tf.reveal.shape, tf.reveal.amount, W, H);
-      drawClip(canvas, active.primary.clip, primaryImg, combine(ownMotion(active.primary.clip), tf.b), W, H, res, stateOf(active.primary.clip));
+      drawClip(canvas, active.primary.clip, primaryImg, combine(ownMotion(active.primary.clip), tf.b), W, H, res, stateOf(active.primary.clip), secondsIn(active.primary.clip));
       canvas.restore();
     }
     if (tf.flash && tf.flash.alpha > 0) {
@@ -298,13 +333,13 @@ export function drawProject(
       canvas.drawRect(Skia.XYWHRect(0, 0, W, H), flash);
     }
   } else if (active.primary && primaryImg) {
-    drawClip(canvas, active.primary.clip, primaryImg, ownMotion(active.primary.clip), W, H, res, stateOf(active.primary.clip));
+    drawClip(canvas, active.primary.clip, primaryImg, ownMotion(active.primary.clip), W, H, res, stateOf(active.primary.clip), secondsIn(active.primary.clip));
   }
 
   for (const overlay of plan.overlays) {
     if (t < overlay.start || t >= overlay.end) continue;
     const img = take(overlay);
-    if (img) drawClip(canvas, overlay, img, ownMotion(overlay), W, H, res, stateOf(overlay));
+    if (img) drawClip(canvas, overlay, img, ownMotion(overlay), W, H, res, stateOf(overlay), secondsIn(overlay));
   }
 
   for (const text of plan.texts) {

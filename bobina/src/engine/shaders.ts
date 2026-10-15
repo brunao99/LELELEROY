@@ -72,3 +72,87 @@ export function gradeUniforms(width: number, height: number, matrix: ColorMatrix
     params.vignette,
   ];
 }
+
+/**
+ * Efeitos de vídeo e chroma key num passo só, sobre a imagem já com a cor
+ * corrigida. `kind`: 0 nenhum, 1 glitch, 2 aberração cromática (RGB), 3
+ * granulado (VHS), 4 pixelado, 5 flash. O chroma key tira a cor escolhida
+ * (comparando só o tom, em YCbCr) e reduz o "vazamento" dela nas bordas.
+ */
+export const FX_SKSL = `
+uniform shader image;
+uniform float2 size;
+uniform float time;
+uniform float kind;
+uniform float amount;
+uniform float keyOn;
+uniform float2 keyCbCr;
+uniform float similarity;
+uniform float smoothness;
+
+float hash(float2 p) {
+  return fract(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
+}
+
+float4 fetch(float2 p) {
+  return float4(image.eval(p));
+}
+
+half4 main(float2 p) {
+  float4 c;
+  if (kind > 0.5 && kind < 1.5) {
+    // Glitch: faixas horizontais que pulam de lado e cores separadas, mudando 12x por segundo.
+    float step = floor(time * 12.0);
+    float band = floor(p.y / max(1.0, size.y * 0.035));
+    float r = hash(float2(band, step));
+    float shift = r > 0.78 ? (hash(float2(step, band + 7.0)) - 0.5) * size.x * 0.14 * amount : 0.0;
+    float split = size.x * 0.01 * amount * (0.4 + hash(float2(step, 3.0)));
+    float2 q = p + float2(shift, 0.0);
+    float4 base = fetch(q);
+    c = float4(fetch(q + float2(split, 0.0)).r, base.g, fetch(q - float2(split, 0.0)).b, base.a);
+  } else if (kind > 1.5 && kind < 2.5) {
+    float s = size.x * 0.012 * amount;
+    float4 base = fetch(p);
+    c = float4(fetch(p + float2(s, 0.0)).r, base.g, fetch(p - float2(s, 0.0)).b, base.a);
+  } else if (kind > 3.5 && kind < 4.5) {
+    float cell = max(1.0, size.x * 0.05 * amount);
+    c = fetch((floor(p / cell) + 0.5) * cell);
+  } else {
+    c = fetch(p);
+  }
+  if (kind > 2.5 && kind < 3.5) {
+    // Granulado com linhas de TV antiga que rolam.
+    float n = hash(p + float2(time * 61.0, time * 17.0)) - 0.5;
+    float lines = 0.5 + 0.5 * sin(p.y * 1.7 + time * 30.0);
+    float3 rgb = c.rgb + float3(n * 0.22 * amount) * c.a - float3(lines * 0.08 * amount) * c.a;
+    c = float4(clamp(rgb, float3(0.0), float3(c.a)), c.a);
+  }
+  if (kind > 4.5 && kind < 5.5) {
+    // Flash branco duas vezes por segundo.
+    float f = pow(max(0.0, sin(time * 6.2831853 * 2.0)), 12.0) * amount;
+    c = float4(mix(c.rgb, float3(c.a), f), c.a);
+  }
+  if (keyOn > 0.5) {
+    float a = max(c.a, 0.0001);
+    float3 rgb = c.rgb / a;
+    float cb = -0.168736 * rgb.r - 0.331264 * rgb.g + 0.5 * rgb.b;
+    float cr = 0.5 * rgb.r - 0.418688 * rgb.g - 0.081312 * rgb.b;
+    float d = distance(float2(cb, cr), keyCbCr);
+    float alpha = smoothstep(similarity, similarity + smoothness, d);
+    // Vazamento: perto da cor tirada, a cor perde a saturação.
+    float spill = 1.0 - smoothstep(similarity, similarity + smoothness + 0.12, d);
+    float l = dot(rgb, float3(0.2126, 0.7152, 0.0722));
+    rgb = mix(rgb, float3(l), spill * 0.7);
+    float na = c.a * alpha;
+    c = float4(rgb * na, na);
+  }
+  return half4(c);
+}
+`;
+
+let fxCached: SkRuntimeEffect | null | undefined;
+
+export function fxEffect(): SkRuntimeEffect | null {
+  if (fxCached === undefined) fxCached = Skia.RuntimeEffect.Make(FX_SKSL);
+  return fxCached;
+}

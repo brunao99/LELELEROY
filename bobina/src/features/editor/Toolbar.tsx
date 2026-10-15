@@ -13,6 +13,7 @@ import {
   Layers,
   Music,
   Palette,
+  Pipette,
   RectangleHorizontal,
   Replace,
   Rewind,
@@ -25,6 +26,7 @@ import {
   Type,
   Volume2,
   Wand2,
+  Zap,
 } from 'lucide-react-native';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
@@ -216,6 +218,8 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
         <ToolbarItem icon={Volume2} label="Volume" onPress={() => openPanel('volume')} disabled={!hasSound} />
         <ToolbarItem icon={Sparkles} label="Animação" onPress={() => openPanel('animation')} />
         <ToolbarItem icon={Diamond} label="Keyframes" onPress={openKeyframes} active={hasKeyframes} />
+        <ToolbarItem icon={Zap} label="Efeitos" onPress={() => openPanel('effects')} active={!!(found.item as { effect?: unknown }).effect} />
+        <ToolbarItem icon={Pipette} label="Chroma" onPress={() => openPanel('chroma')} active={!!(found.item as { chroma?: unknown }).chroma} />
         <ToolbarItem icon={Wand2} label="Filtros" onPress={() => openPanel('filters')} />
         <ToolbarItem icon={SlidersHorizontal} label="Ajustar" onPress={() => openPanel('adjust')} />
         <ToolbarItem icon={Crop} label="Enquadrar" onPress={() => openPanel('frame')} />
