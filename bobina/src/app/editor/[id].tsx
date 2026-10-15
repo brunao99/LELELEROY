@@ -22,6 +22,8 @@ import { EditorContext, type EditorRuntime } from '@/features/editor/EditorConte
 import { PanelSwitch } from '@/features/editor/PanelSwitch';
 import { PlaybackBar } from '@/features/editor/PlaybackBar';
 import { FullscreenPreview } from '@/features/editor/FullscreenPreview';
+import { CutoutStage } from '@/features/editor/cutout/CutoutStage';
+import { useCutoutEditor } from '@/features/editor/cutout/store';
 import { Preview } from '@/features/editor/Preview';
 import { Toolbar } from '@/features/editor/Toolbar';
 import { makeCover } from '@/features/editor/cover';
@@ -204,6 +206,8 @@ function EditorBody({ project }: { project: Project }) {
   // (arrastar no preview, barra deslizante) elas atualizam com prioridade menor
   // e o preview acompanha o dedo sem engasgar.
   const deferredProject = useDeferredValue(project);
+  // Recorte com laço aberto: o palco dele cobre o preview.
+  const cutoutOpen = useCutoutEditor((s) => s.clipId !== null);
 
   return (
     <EditorContext.Provider value={runtime}>
@@ -235,7 +239,10 @@ function EditorBody({ project }: { project: Project }) {
             </Txt>
           </View>
         ) : null}
-        <Preview project={project} plan={plan} resources={resources} player={player} size={size} onSize={setSize} />
+        <View style={styles.previewArea}>
+          <Preview project={project} plan={plan} resources={resources} player={player} size={size} onSize={setSize} />
+          {cutoutOpen ? <CutoutStage /> : null}
+        </View>
         <PlaybackBar
           player={player}
           durationUs={plan.duration}
@@ -279,6 +286,7 @@ function EditorBody({ project }: { project: Project }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  previewArea: { flex: 1 },
   topBar: { height: 48, flexDirection: 'row', alignItems: 'center', paddingLeft: space[1] },
   emptyHint: { position: 'absolute', top: '40%', left: 0, right: 0, alignItems: 'center' },
   missing: {

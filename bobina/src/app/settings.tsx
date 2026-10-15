@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { WHISPER_MODELS } from '@/core/captions';
 import { deleteModel, isModelReady, modelFile } from '@/engine/captions';
+import { CUTOUT_MODEL, cutoutModelBytes, deleteCutoutModel, isCutoutModelReady } from '@/engine/cutout';
 import { exportsDir, projectsRoot } from '@/storage/paths';
 import { directorySize } from '@/storage/projects';
 import { Button, IconButton } from '@/ui/Button';
@@ -136,13 +137,39 @@ export default function Settings() {
           </Txt>
         </View>
 
+        <SectionLabel>Recorte com laço</SectionLabel>
+        <View style={styles.card}>
+          <View style={styles.modelRow}>
+            <View style={{ flex: 1 }}>
+              <Txt variant="sm">Modelo {CUTOUT_MODEL.name}</Txt>
+              <Txt variant="xs" tone="muted">
+                {isCutoutModelReady() ? `Baixado · ${formatBytes(cutoutModelBytes())}` : `Não baixado · ${CUTOUT_MODEL.megabytes} MB`}
+              </Txt>
+            </View>
+            {isCutoutModelReady() ? (
+              <Button
+                label="Apagar"
+                size="sm"
+                variant="ghost"
+                onPress={() => {
+                  deleteCutoutModel();
+                  refresh();
+                }}
+              />
+            ) : null}
+          </View>
+          <Txt variant="xs" tone="muted">
+            O EdgeTAM é da Meta (licença Apache-2.0) e roda no aparelho com o ONNX Runtime. O vídeo nunca sai do celular.
+          </Txt>
+        </View>
+
         <SectionLabel>Sobre</SectionLabel>
         <View style={styles.card}>
           <Txt variant="sm">{"Ledit's 0.1.0 · projeto pessoal"}</Txt>
           <Txt variant="xs" tone="muted">
             Fontes do texto: {FONT_LICENSES.join(', ')}. Ícones: Lucide (ISC). Motor de vídeo: React Native Skia e
             react-native-skia-video (MIT). Reconhecimento de fala: whisper.cpp (MIT) e detector de voz Silero (MIT).
-            MP3: lamejs (LGPL-3.0).
+            MP3: lamejs (LGPL-3.0). Recorte com laço: EdgeTAM (Meta, Apache-2.0) e ONNX Runtime (MIT).
           </Txt>
         </View>
       </ScrollView>

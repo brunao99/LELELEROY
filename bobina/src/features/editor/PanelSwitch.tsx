@@ -4,6 +4,7 @@ import { useEditor } from '@/state/editor';
 import { AudioPanel } from './panels/AudioPanel';
 import { CaptionStylePanel, CaptionsBatchPanel, CaptionsPanel } from './panels/CaptionsPanels';
 import { AdjustPanel, AnimationPanel, FiltersPanel, FramePanel, OpacityPanel, SpeedPanel, VolumePanel } from './panels/ClipPanels';
+import { CutoutPanel } from './panels/CutoutPanel';
 import { ChromaPanel, EffectsPanel } from './panels/EffectsPanels';
 import { KeyframesPanel } from './panels/KeyframesPanel';
 import { BackgroundPanel, CoverPanel, FormatPanel, TransitionPanel } from './panels/ProjectPanels';
@@ -53,6 +54,8 @@ export function PanelSwitch({ project }: { project: Project }) {
       return <EffectsPanel project={project} />;
     case 'chroma':
       return <ChromaPanel project={project} />;
+    case 'cutout':
+      return <CutoutPanel project={project} />;
     default:
       return null;
   }

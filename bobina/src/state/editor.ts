@@ -42,7 +42,8 @@ export type PanelId =
   | 'cover'
   | 'keyframes'
   | 'effects'
-  | 'chroma';
+  | 'chroma'
+  | 'cutout';
 
 export interface Toast {
   id: number;
