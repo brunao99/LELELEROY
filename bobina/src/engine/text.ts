@@ -79,7 +79,8 @@ function build(
 
 /**
  * Monta o texto. `shortSide` é o lado menor do quadro (o tamanho da letra é uma
- * fração dele) e `maxWidth` a largura máxima de uma linha.
+ * fração dele) e `maxWidth` a largura máxima de uma linha. Com `balance`, as
+ * linhas saem com larguras parecidas (usado nas legendas).
  */
 export function buildTextParts(
   text: string,
@@ -87,13 +88,30 @@ export function buildTextParts(
   shortSide: number,
   maxWidth: number,
   provider: SkTypefaceFontProvider,
+  balance = false,
 ): TextParts {
   const fontSize = Math.max(4, style.size * shortSide);
   const content = text.length > 0 ? text : ' ';
   // Primeiro mede com a largura máxima, depois refaz com a largura da linha mais
   // longa: assim a caixa abraça o texto e o alinhamento funciona em várias linhas.
   const probe = build(content, style, fontSize, provider, maxWidth, null);
-  const width = Math.min(maxWidth, Math.ceil(probe.getLongestLine()) + 2);
+  let layoutWidth = maxWidth;
+  const lines = probe.getLineMetrics().length;
+  if (balance && lines >= 2) {
+    // Linhas equilibradas: a menor largura que ainda dá o mesmo número de linhas.
+    // Evita uma palavra sozinha na última linha.
+    let lo = maxWidth / (lines + 1);
+    let hi = maxWidth;
+    for (let i = 0; i < 10; i++) {
+      const mid = (lo + hi) / 2;
+      probe.layout(mid);
+      if (probe.getLineMetrics().length > lines) lo = mid;
+      else hi = mid;
+    }
+    probe.layout(hi);
+    layoutWidth = hi;
+  }
+  const width = Math.min(layoutWidth, Math.ceil(probe.getLongestLine()) + 2);
   const fill = build(content, style, fontSize, provider, width, null);
   let stroke: SkParagraph | null = null;
   if (style.stroke && style.stroke.width > 0) {

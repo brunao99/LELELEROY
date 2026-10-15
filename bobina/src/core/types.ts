@@ -203,11 +203,23 @@ export interface TextItem {
   animLoop: LoopAnimKind;
 }
 
+/** Uma palavra falada, com o tempo dela na timeline. */
+export interface CaptionWord {
+  text: string;
+  start: Micros;
+  end: Micros;
+}
+
 export interface Caption {
   id: string;
   start: Micros;
   end: Micros;
   text: string;
+  /**
+   * Palavras com tempo, da transcrição automática. Quando existem, juntas com
+   * espaço formam exatamente `text`; se o texto for reescrito, somem.
+   */
+  words?: CaptionWord[];
 }
 
 export type CaptionSource = 'video' | 'voiceover' | 'both';

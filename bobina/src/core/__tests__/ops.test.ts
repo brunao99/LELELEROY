@@ -22,6 +22,7 @@ import {
   splitCaptionAtChar,
   splitItem,
   trimItem,
+  updateCaptionText,
   updateVisualAll,
 } from '../ops';
 import { MAX_IMAGE_DURATION, sec } from '../time';
@@ -353,6 +354,57 @@ describe('legendas', () => {
     expect(r.project.captions.items.map((c) => c.text)).toEqual(['primeira', 'frase', 'segunda']);
     const merged = mergeCaptionWithNext(r.project, r.project.captions.items[0]!.id);
     expect(merged.captions.items.map((c) => c.text)).toEqual(['primeira frase', 'segunda']);
+  });
+
+  describe('com o tempo de cada palavra', () => {
+    const words = () =>
+      setCaptions(
+        projectWith(10),
+        [
+          {
+            id: 'w',
+            start: sec(1),
+            end: sec(3),
+            text: 'oi tudo bem',
+            words: [
+              { text: 'oi', start: sec(1), end: sec(1.3) },
+              { text: 'tudo', start: sec(1.6), end: sec(2) },
+              { text: 'bem', start: sec(2.2), end: sec(2.6) },
+            ],
+          },
+        ],
+        'pt',
+        'video',
+      );
+
+    it('divide no texto exatamente onde a palavra começa', () => {
+      const r = splitCaptionAtChar(words(), 'w', 'oi'.length)!;
+      const [a, b] = r.project.captions.items;
+      expect(a).toMatchObject({ text: 'oi', end: sec(1.6) });
+      expect(b).toMatchObject({ text: 'tudo bem', start: sec(1.6) });
+      expect(b!.words!.map((w) => w.text)).toEqual(['tudo', 'bem']);
+    });
+
+    it('divide no cursor da timeline entre as palavras certas', () => {
+      const r = splitItem(words(), 'w', sec(2.1))!;
+      expect(r.project.captions.items.map((c) => c.text)).toEqual(['oi tudo', 'bem']);
+      expect(r.project.captions.items[1]!.words!.map((w) => w.text)).toEqual(['bem']);
+    });
+
+    it('juntar mantém as palavras; mover leva as palavras junto', () => {
+      const r = splitCaptionAtChar(words(), 'w', 'oi'.length)!;
+      const merged = mergeCaptionWithNext(r.project, r.project.captions.items[0]!.id);
+      expect(merged.captions.items[0]!.words!.map((w) => w.text)).toEqual(['oi', 'tudo', 'bem']);
+      const moved = moveItem(words(), 'w', sec(5));
+      expect(moved.captions.items[0]!.words![0]!.start).toBe(sec(5));
+    });
+
+    it('corrigir uma palavra mantém os tempos; reescrever a frase descarta', () => {
+      const fixed = updateCaptionText(words(), 'w', 'oi tudo bom');
+      expect(fixed.captions.items[0]!.words!.map((w) => w.text)).toEqual(['oi', 'tudo', 'bom']);
+      const rewritten = updateCaptionText(words(), 'w', 'olá a todos vocês');
+      expect(rewritten.captions.items[0]!.words).toBeUndefined();
+    });
   });
 });
 

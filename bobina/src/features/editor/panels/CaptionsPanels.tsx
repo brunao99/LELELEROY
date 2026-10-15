@@ -55,7 +55,12 @@ export function CaptionsPanel({ project }: { project: Project }) {
   const openPanel = useEditor((s) => s.openPanel);
   const [source, setSource] = useState<CaptionSource>(project.captions.source);
   const [language, setLanguage] = useState(project.captions.language ?? 'pt');
-  const [modelId, setModelId] = useState(WHISPER_MODELS[0]!.id);
+  // O preciso é o recomendado; o rápido fica como padrão só se for o único já baixado.
+  const [modelId, setModelId] = useState(() => {
+    const precise = WHISPER_MODELS.find((m) => m.id === 'small')!;
+    const fast = WHISPER_MODELS.find((m) => m.id === 'base')!;
+    return !isModelReady(precise) && isModelReady(fast) ? fast.id : precise.id;
+  });
   const [status, setStatus] = useState<Status>({ stage: 'idle' });
   const abort = useRef<AbortController | null>(null);
   const model = WHISPER_MODELS.find((m) => m.id === modelId)!;
@@ -126,6 +131,11 @@ export function CaptionsPanel({ project }: { project: Project }) {
         value={modelId}
         onChange={setModelId}
       />
+      <Note>
+        {modelId === 'small'
+          ? 'Reconhece melhor sotaques, nomes e fala rápida. Demora mais para gerar.'
+          : 'Gera mais rápido, mas erra mais palavras. Bom para fala clara e sem barulho.'}
+      </Note>
       {running ? (
         <View style={styles.status}>
           <Txt variant="sm">{STAGE_LABEL[status.stage as keyof typeof STAGE_LABEL]}</Txt>

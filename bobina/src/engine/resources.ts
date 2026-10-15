@@ -58,7 +58,7 @@ export function buildAllText(plan: RenderPlan, provider: SkTypefaceFontProvider)
   }
   const captions: Record<string, TextParts> = {};
   for (const c of plan.captions.items) {
-    captions[c.id] = buildTextParts(c.text, plan.captions.style, shortSide, plan.width * CAPTION_MAX_WIDTH, provider);
+    captions[c.id] = buildTextParts(c.text, plan.captions.style, shortSide, plan.width * CAPTION_MAX_WIDTH, provider, true);
   }
   return { texts, captions };
 }
@@ -130,7 +130,7 @@ export function useDrawResources(
     const captions: Record<string, TextParts> = {};
     for (const c of plan.captions.items) {
       captions[c.id] = cachedParts(captionCache, usedCaptions, `${c.id}:${c.version}:${size}`, () =>
-        buildTextParts(c.text, plan.captions.style, shortSide, plan.width * CAPTION_MAX_WIDTH, provider),
+        buildTextParts(c.text, plan.captions.style, shortSide, plan.width * CAPTION_MAX_WIDTH, provider, true),
       );
     }
     prune(captionCache, usedCaptions);

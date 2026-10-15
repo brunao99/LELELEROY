@@ -29,6 +29,7 @@ import type {
   Background,
   Caption,
   CaptionSource,
+  CaptionWord,
   ExportSettings,
   ItemKind,
   MainClip,
@@ -233,6 +234,17 @@ export function trimItem(project: Project, id: string, edge: Edge, delta: Micros
 
 // ---------------------------------------------------------------- dividir
 
+/** As palavras com tempo só valem enquanto formam exatamente o texto da legenda. */
+function captionWords(caption: Caption): CaptionWord[] | null {
+  const words = caption.words;
+  if (!words || words.length === 0) return null;
+  return words.map((w) => w.text).join(' ') === caption.text ? words : null;
+}
+
+function shiftWords(words: CaptionWord[] | undefined, delta: Micros): CaptionWord[] | undefined {
+  return words?.map((w) => ({ ...w, start: w.start + delta, end: w.end + delta }));
+}
+
 function splitWords(text: string, fraction: number): [string, string] {
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (words.length < 2) return [text, text];
@@ -321,9 +333,21 @@ export function splitItem(project: Project, id: string, t: Micros): Added | null
       const local = t - caption.start;
       const length = caption.end - caption.start;
       if (local < MIN_CLIP || length - local < MIN_CLIP) return null;
-      const [ta, tb] = splitWords(caption.text, local / length);
-      const a: Caption = { ...caption, end: t, text: ta };
-      const b: Caption = { id: newId('s'), start: t, end: caption.end, text: tb };
+      const words = captionWords(caption);
+      // Com o tempo de cada palavra, divide entre as palavras certas.
+      const k = words ? words.filter((w) => (w.start + w.end) / 2 < t).length : 0;
+      let a: Caption;
+      let b: Caption;
+      if (words && k > 0 && k < words.length) {
+        const wa = words.slice(0, k);
+        const wb = words.slice(k);
+        a = { ...caption, end: t, text: wa.map((w) => w.text).join(' '), words: wa };
+        b = { id: newId('s'), start: t, end: caption.end, text: wb.map((w) => w.text).join(' '), words: wb };
+      } else {
+        const [ta, tb] = splitWords(caption.text, local / length);
+        a = { ...caption, end: t, text: ta, words: undefined };
+        b = { id: newId('s'), start: t, end: caption.end, text: tb };
+      }
       const items = [...project.captions.items];
       const i = items.findIndex((c) => c.id === id);
       items.splice(i, 1, a, b);
@@ -383,7 +407,9 @@ export function moveItem(project: Project, id: string, start: Micros, layer?: nu
     const lo = i > 0 ? items[i - 1]!.end : 0;
     const hi = i < items.length - 1 ? items[i + 1]!.start - length : Number.POSITIVE_INFINITY;
     const s = clamp(at, lo, Math.max(lo, hi));
-    return s === caption.start ? project : mapCaption(project, id, (c) => ({ ...c, start: s, end: s + length }));
+    return s === caption.start
+      ? project
+      : mapCaption(project, id, (c) => ({ ...c, start: s, end: s + length, words: shiftWords(c.words, s - c.start) }));
   }
   if (found.kind === 'main') return project;
   const item = found.item as OverlayClip | AudioClip | TextItem;
@@ -699,7 +725,16 @@ export function setCaptions(
 }
 
 export function updateCaptionText(project: Project, id: string, text: string): Project {
-  return mapCaption(project, id, (c) => (c.text === text ? c : { ...c, text }));
+  return mapCaption(project, id, (c) => {
+    if (c.text === text) return c;
+    // Corrigiu palavras sem mudar quantas são: mantém o tempo de cada uma.
+    const words = captionWords(c);
+    const parts = text.trim().split(/\s+/);
+    if (words && parts.length === words.length && parts.join(' ') === text) {
+      return { ...c, text, words: words.map((w, i) => ({ ...w, text: parts[i]! })) };
+    }
+    return { ...c, text, words: undefined };
+  });
 }
 
 export function setCaptionStyle(project: Project, patch: Partial<TextStyle>): Project {
@@ -726,10 +761,16 @@ export function splitCaptionAtChar(project: Project, id: string, charIndex: numb
   const right = caption.text.slice(charIndex).trim();
   if (!left || !right) return null;
   const length = caption.end - caption.start;
-  const t = caption.start + Math.round((length * left.length) / (left.length + right.length));
+  const words = captionWords(caption);
+  const k = left.split(/\s+/).length;
+  // Com o tempo das palavras, divide no começo da primeira palavra da direita.
+  const exact = words && words.map((w) => w.text).slice(0, k).join(' ') === left ? words : null;
+  const t = exact
+    ? Math.max(caption.start, exact[k]!.start)
+    : caption.start + Math.round((length * left.length) / (left.length + right.length));
   if (t - caption.start < MIN_CLIP || caption.end - t < MIN_CLIP) return null;
-  const a: Caption = { ...caption, end: t, text: left };
-  const b: Caption = { id: newId('s'), start: t, end: caption.end, text: right };
+  const a: Caption = { ...caption, end: t, text: left, words: exact ? exact.slice(0, k) : undefined };
+  const b: Caption = { id: newId('s'), start: t, end: caption.end, text: right, words: exact ? exact.slice(k) : undefined };
   const next = [...items];
   next.splice(i, 1, a, b);
   return { project: { ...project, captions: { ...project.captions, items: next } }, id: b.id };
@@ -741,7 +782,14 @@ export function mergeCaptionWithNext(project: Project, id: string): Project {
   if (i < 0 || i >= items.length - 1) return project;
   const a = items[i]!;
   const b = items[i + 1]!;
-  const merged: Caption = { ...a, end: b.end, text: `${a.text} ${b.text}`.trim() };
+  const wa = captionWords(a);
+  const wb = captionWords(b);
+  const merged: Caption = {
+    ...a,
+    end: b.end,
+    text: `${a.text} ${b.text}`.trim(),
+    words: wa && wb ? [...wa, ...wb] : undefined,
+  };
   const next = [...items];
   next.splice(i, 2, merged);
   return { ...project, captions: { ...project.captions, items: next } };
