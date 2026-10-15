@@ -4,7 +4,7 @@ import { useEditor } from '@/state/editor';
 import { AudioPanel } from './panels/AudioPanel';
 import { CaptionStylePanel, CaptionsBatchPanel, CaptionsPanel } from './panels/CaptionsPanels';
 import { AdjustPanel, AnimationPanel, FiltersPanel, FramePanel, OpacityPanel, SpeedPanel, VolumePanel } from './panels/ClipPanels';
-import { BackgroundPanel, FormatPanel, TransitionPanel } from './panels/ProjectPanels';
+import { BackgroundPanel, CoverPanel, FormatPanel, TransitionPanel } from './panels/ProjectPanels';
 import { TextPanel } from './panels/TextPanel';
 
 /** O painel aberto (no lugar da timeline e da barra de ferramentas). */
@@ -43,6 +43,8 @@ export function PanelSwitch({ project }: { project: Project }) {
       return <OpacityPanel project={project} withBlend />;
     case 'opacity':
       return <OpacityPanel project={project} withBlend={false} />;
+    case 'cover':
+      return <CoverPanel project={project} />;
     default:
       return null;
   }

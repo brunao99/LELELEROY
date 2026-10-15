@@ -13,6 +13,15 @@ import type {
 } from './types';
 
 /** Duração de um clipe na timeline: trecho da mídia ÷ velocidade. */
+/** Instante da mídia que aparece `local` µs depois do começo do clipe (o inverso também). */
+export function sourceTimeAt(
+  clip: Pick<ClipBase, 'sourceIn' | 'sourceOut' | 'speed' | 'reverse'>,
+  local: Micros,
+): Micros {
+  const t = clip.reverse ? clip.sourceOut - local * clip.speed : clip.sourceIn + local * clip.speed;
+  return Math.round(Math.min(clip.sourceOut, Math.max(clip.sourceIn, t)));
+}
+
 export function clipDuration(clip: Pick<ClipBase, 'sourceIn' | 'sourceOut' | 'speed'>): Micros {
   return Math.max(MIN_CLIP, Math.round((clip.sourceOut - clip.sourceIn) / clip.speed));
 }

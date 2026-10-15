@@ -1,4 +1,4 @@
-import { Pause, Play, Redo2, Undo2 } from 'lucide-react-native';
+import { Maximize2, Pause, Play, Redo2, Undo2 } from 'lucide-react-native';
 import { StyleSheet, TextInput, View } from 'react-native';
 import Animated, { useAnimatedProps, useDerivedValue } from 'react-native-reanimated';
 
@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react';
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
 
 /** Tempo atual / total, play/pause, desfazer e refazer. */
-export function PlaybackBar({ player, durationUs }: { player: PreviewPlayer; durationUs: number }) {
+export function PlaybackBar({ player, durationUs, onFullscreen }: { player: PreviewPlayer; durationUs: number; onFullscreen: () => void }) {
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
   const canUndo = useCanUndo();
@@ -41,6 +41,7 @@ export function PlaybackBar({ player, durationUs }: { player: PreviewPlayer; dur
       />
       <IconButton icon={playing ? Pause : Play} label={playing ? 'Pausar' : 'Tocar'} onPress={player.toggle} size={26} />
       <View style={styles.right}>
+        <IconButton icon={Maximize2} label="Tela cheia" onPress={onFullscreen} />
         <IconButton icon={Undo2} label="Desfazer" onPress={undo} disabled={!canUndo} />
         <IconButton icon={Redo2} label="Refazer" onPress={redo} disabled={!canRedo} />
       </View>
@@ -58,12 +59,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   time: {
-    width: 130,
+    width: 144,
     color: colors.text,
     fontSize: 13,
     fontVariant: ['tabular-nums'],
     paddingHorizontal: space[2],
     paddingVertical: 0,
   },
-  right: { flexDirection: 'row', width: 130, justifyContent: 'flex-end' },
+  right: { flexDirection: 'row', width: 144, justifyContent: 'flex-end' },
 });

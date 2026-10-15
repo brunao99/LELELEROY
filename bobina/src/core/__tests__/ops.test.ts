@@ -6,6 +6,7 @@ import {
   duplicateItem,
   extractAudio,
   findItem,
+  insertFreezeFrame,
   insertMainClips,
   mergeCaptionWithNext,
   moveItem,
@@ -363,6 +364,32 @@ describe('de trás para frente', () => {
     expect(setReverse(p, id, false).main[0]!.reverse).toBeUndefined();
     const ex = extractAudio(p, id)!;
     expect(findItem(ex.project, ex.id)!.item).toMatchObject({ reverse: true });
+  });
+});
+
+describe('congelar quadro', () => {
+  it('divide o clipe e põe a foto do quadro no meio, com o mesmo enquadramento', () => {
+    let p = projectWith(10);
+    const id = p.main[0]!.id;
+    p = { ...p, main: [{ ...p.main[0]!, transform: { x: 0.1, y: 0, scale: 1.2, rotation: 0 } }] };
+    const frame = imageAsset();
+    const r = insertFreezeFrame(p, id, sec(4), frame)!;
+    const [a, f, b] = r.project.main;
+    expect(r.project.main).toHaveLength(3);
+    expect(f).toMatchObject({ id: r.id, assetId: frame.id, sourceIn: 0, sourceOut: sec(3), transform: { x: 0.1, scale: 1.2 } });
+    expect(a).toMatchObject({ sourceIn: 0, sourceOut: sec(4) });
+    expect(b).toMatchObject({ sourceIn: sec(4), sourceOut: sec(10) });
+    expect(r.project.assets[frame.id]).toBe(frame);
+    expect(mainDuration(r.project)).toBe(sec(13));
+  });
+
+  it('perto das pontas, entra antes ou depois sem dividir', () => {
+    const p = projectWith(10);
+    const id = p.main[0]!.id;
+    const before = insertFreezeFrame(p, id, sec(0.02), imageAsset())!;
+    expect(before.project.main.map((c) => c.id)).toEqual([before.id, id]);
+    const after = insertFreezeFrame(p, id, sec(9.98), imageAsset())!;
+    expect(after.project.main.map((c) => c.id)).toEqual([id, after.id]);
   });
 });
 

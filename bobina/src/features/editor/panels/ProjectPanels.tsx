@@ -1,10 +1,11 @@
 import { ImagePlus } from 'lucide-react-native';
 import { useState } from 'react';
+import { Image, StyleSheet, View } from 'react-native';
 
 import { RATIOS } from '@/core/geometry';
 import { TRANSITIONS } from '@/core/motion';
-import { addAssets, setBackground, setRatio, setTransition, setTransitionAll } from '@/core/ops';
-import { DEFAULT_TRANSITION, sec } from '@/core/time';
+import { addAssets, setBackground, setCoverTime, setRatio, setTransition, setTransitionAll } from '@/core/ops';
+import { DEFAULT_TRANSITION, formatTime, sec } from '@/core/time';
 import { layoutMain } from '@/core/timeline';
 import type { Project, Ratio, TransitionKind } from '@/core/types';
 import { importAll, pickVisualMedia } from '@/features/media/pick';
@@ -15,9 +16,68 @@ import { ColorRow } from '@/ui/ColorRow';
 import { Panel } from '@/ui/Panel';
 import { Slider } from '@/ui/Slider';
 import { Tabs } from '@/ui/Tabs';
-import { space } from '@/ui/theme';
+import { Txt } from '@/ui/Text';
+import { colors, radius, space } from '@/ui/theme';
 
+import { coverUri, makeCover } from '../cover';
+import { useEditorRuntime } from '../EditorContext';
 import { Note, usePanelActions } from './common';
+
+/** Capa do projeto em Meus projetos: o quadro da agulha ou o começo do vídeo. */
+export function CoverPanel({ project }: { project: Project }) {
+  const { apply, close } = usePanelActions();
+  const { now, player } = useEditorRuntime();
+  const [uri, setUri] = useState(() => coverUri(project.id));
+  const [version, setVersion] = useState(0);
+  const [working, setWorking] = useState(false);
+
+  /** Muda o instante da capa e gera a imagem de novo. */
+  const choose = async (t: number | null) => {
+    apply((p) => setCoverTime(p, t));
+    const current = useEditor.getState().history?.present;
+    if (!current) return;
+    setWorking(true);
+    try {
+      await makeCover(current);
+      setUri(coverUri(project.id));
+      setVersion((v) => v + 1);
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  return (
+    <Panel title="Capa" onDone={close}>
+      <View style={styles.coverRow}>
+        <View style={styles.coverThumb}>
+          {uri ? <Image key={version} source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityLabel="Capa atual" /> : null}
+        </View>
+        <View style={{ flex: 1, gap: space[1] }}>
+          <Txt variant="sm" weight="600">
+            {project.coverTime === null ? 'Começo do vídeo' : `Quadro em ${formatTime(project.coverTime, false)}`}
+          </Txt>
+          <Txt variant="xs" tone="muted">
+            {working ? 'Atualizando…' : 'Aparece em Meus projetos.'}
+          </Txt>
+        </View>
+      </View>
+      <Row style={{ paddingHorizontal: space[4] }}>
+        <Button
+          label="Usar o quadro da agulha"
+          disabled={working}
+          onPress={() => {
+            player?.pause();
+            choose(now()).catch(() => {});
+          }}
+        />
+        {project.coverTime !== null ? (
+          <Button label="Voltar ao começo" variant="ghost" disabled={working} onPress={() => choose(null).catch(() => {})} />
+        ) : null}
+      </Row>
+      <Note>Mova a agulha até o quadro que quer como capa e toque em “Usar o quadro da agulha”.</Note>
+    </Panel>
+  );
+}
 
 export function TransitionPanel({ project }: { project: Project }) {
   const target = useEditor((s) => s.panelTarget);
@@ -139,3 +199,15 @@ export function BackgroundPanel({ project }: { project: Project }) {
     </Panel>
   );
 }
+
+const styles = StyleSheet.create({
+  coverRow: { flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4] },
+  coverThumb: {
+    width: 72,
+    height: 96,
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceRaised,
+  },
+});

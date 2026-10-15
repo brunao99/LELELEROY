@@ -8,6 +8,7 @@ import {
   Crop,
   Film,
   Gauge,
+  ImageIcon,
   Layers,
   Music,
   Palette,
@@ -16,6 +17,7 @@ import {
   Rewind,
   Scissors,
   SlidersHorizontal,
+  Snowflake,
   Sparkles,
   SquareDashed,
   Trash2,
@@ -25,9 +27,21 @@ import {
 } from 'lucide-react-native';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { addOverlay, addText, duplicateItem, extractAudio, findItem, removeItem, replaceMedia, setReverse, splitItem } from '@/core/ops';
-import { layoutMain, mainSlotAt } from '@/core/timeline';
+import {
+  addOverlay,
+  addText,
+  duplicateItem,
+  extractAudio,
+  findItem,
+  insertFreezeFrame,
+  removeItem,
+  replaceMedia,
+  setReverse,
+  splitItem,
+} from '@/core/ops';
+import { layoutMain, mainSlotAt, sourceTimeAt } from '@/core/timeline';
 import type { Project } from '@/core/types';
+import { grabFrame } from '@/engine/frameGrab';
 import { importAll, pickVisualMedia } from '@/features/media/pick';
 import { useEditor } from '@/state/editor';
 import { ToolbarItem } from '@/ui/Button';
@@ -97,6 +111,30 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
     showToast(reversed ? 'O clipe voltou a tocar normalmente.' : 'O clipe vai tocar de trás para frente.');
   };
 
+  const freeze = async () => {
+    if (!selection || kind !== 'main' || asset?.kind !== 'video') return;
+    player?.pause();
+    const id = selection.id;
+    const t = now();
+    const slot = layoutMain(project).find((s) => s.clip.id === id);
+    if (!slot || t < slot.start || t > slot.end) {
+      showToast('Ponha a agulha sobre o clipe que quer congelar.');
+      return;
+    }
+    setBusy({ label: 'Congelando o quadro', fraction: null });
+    try {
+      const image = await grabFrame(project.id, asset, sourceTimeAt(slot.clip, t - slot.start));
+      if (applyAdded((p) => insertFreezeFrame(p, id, t, image), 'main')) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        showToast('Quadro congelado por 3 s. Arraste as pontas para mudar o tempo.');
+      }
+    } catch (e) {
+      showToast(`Não foi possível congelar o quadro: ${String(e)}`, 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const extract = () => {
     if (!selection) return;
     if (!applyAdded((p) => extractAudio(p, selection.id), 'audio')) showToast('Este clipe não tem som.');
@@ -154,6 +192,10 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
         <ToolbarItem icon={SlidersHorizontal} label="Ajustar" onPress={withClip('adjust')} />
         <ToolbarItem icon={RectangleHorizontal} label="Formato" onPress={() => openPanel('format')} />
         <ToolbarItem icon={Palette} label="Fundo" onPress={() => openPanel('background')} />
+        <ToolbarItem icon={ImageIcon} label="Capa" onPress={() => {
+          player?.pause();
+          openPanel('cover');
+        }} />
       </>
     );
   } else if (kind === 'main' || kind === 'overlay') {
@@ -162,6 +204,7 @@ export function Toolbar({ project, onAddMedia }: { project: Project; onAddMedia:
         <ToolbarItem icon={Scissors} label="Dividir" onPress={split} />
         <ToolbarItem icon={Gauge} label="Velocidade" onPress={() => openPanel('speed')} disabled={isPhoto} />
         <ToolbarItem icon={Rewind} label={reversed ? 'Desinverter' : 'Inverter'} onPress={toggleReverse} disabled={isPhoto} active={reversed} />
+        {kind === 'main' ? <ToolbarItem icon={Snowflake} label="Congelar" onPress={freeze} disabled={isPhoto} /> : null}
         <ToolbarItem icon={Volume2} label="Volume" onPress={() => openPanel('volume')} disabled={!hasSound} />
         <ToolbarItem icon={Sparkles} label="Animação" onPress={() => openPanel('animation')} />
         <ToolbarItem icon={Wand2} label="Filtros" onPress={() => openPanel('filters')} />

@@ -2,7 +2,7 @@
  * Operações de edição. Todas são puras: recebem um projeto e devolvem outro
  * (ou o mesmo objeto, quando nada muda). Nenhuma lê o relógio ou o disco.
  */
-import { NO_ANIM, makeAudioClip, makeOverlayClip, makeTextItem } from './defaults';
+import { NO_ANIM, makeAudioClip, makeMainClip, makeOverlayClip, makeTextItem } from './defaults';
 import { newId } from './ids';
 import {
   DEFAULT_IMAGE_DURATION,
@@ -497,6 +497,56 @@ export function setSpeed(project: Project, id: string, speed: number, keepPitch:
   );
   if (clash) next = moveItem(next, id, moved.start, firstFreeLayer(list, moved.start, itemEnd(moved), id));
   return next;
+}
+
+/** Escolhe o instante da timeline que vira a capa do projeto (null: o começo). */
+export function setCoverTime(project: Project, t: Micros | null): Project {
+  const value = t === null ? null : Math.max(0, Math.round(t));
+  return project.coverTime === value ? project : { ...project, coverTime: value };
+}
+
+/** Quanto dura um quadro congelado ao ser criado. */
+export const FREEZE_DURATION: Micros = 3_000_000;
+
+/**
+ * Congela o quadro do instante `t`: divide o clipe principal ali e põe entre as
+ * duas partes a foto `image` desse quadro, com o mesmo enquadramento e cor.
+ * Perto de uma ponta, a foto entra antes ou depois do clipe, sem dividir.
+ */
+export function insertFreezeFrame(project: Project, id: string, t: Micros, image: MediaAsset): Added | null {
+  const found = findItem(project, id);
+  if (!found || found.kind !== 'main' || image.kind !== 'image') return null;
+  const slot = layoutMain(project).find((s) => s.clip.id === id);
+  if (!slot) return null;
+  const clip = slot.clip;
+  const local = clamp(t - slot.start, 0, slot.duration);
+  const base = makeMainClip(image);
+  const freeze: MainClip = {
+    ...base,
+    sourceIn: 0,
+    sourceOut: FREEZE_DURATION,
+    transform: { ...clip.transform },
+    crop: { ...clip.crop },
+    flipH: clip.flipH,
+    flipV: clip.flipV,
+    opacity: clip.opacity,
+    filter: clip.filter ? { ...clip.filter } : null,
+    adjust: { ...clip.adjust },
+  };
+  const main = [...project.main];
+  if (local < MIN_CLIP) {
+    main.splice(slot.index, 0, freeze);
+  } else if (slot.duration - local < MIN_CLIP) {
+    // A transição que saía do clipe passa a sair do quadro congelado.
+    main.splice(slot.index, 1, { ...clip, transitionOut: null }, { ...freeze, transitionOut: clip.transitionOut });
+  } else {
+    const [a0, b0] = splitClipRange(clip, project.assets[clip.assetId], local);
+    const a: MainClip = { ...a0, transitionOut: null, animOut: { ...NO_ANIM }, fadeOut: 0 };
+    const b: MainClip = { ...b0, animIn: { ...NO_ANIM }, fadeIn: 0 };
+    main.splice(slot.index, 1, a, freeze, b);
+  }
+  const next = normalize({ ...addAssets(project, [image]), main });
+  return { project: withCaptionsWarning(project, next), id: freeze.id };
 }
 
 /** Toca o clipe de trás para frente (ou volta ao normal). Só vídeos. */

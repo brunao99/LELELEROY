@@ -21,6 +21,7 @@ import { useDrawResources } from '@/engine/resources';
 import { EditorContext, type EditorRuntime } from '@/features/editor/EditorContext';
 import { PanelSwitch } from '@/features/editor/PanelSwitch';
 import { PlaybackBar } from '@/features/editor/PlaybackBar';
+import { FullscreenPreview } from '@/features/editor/FullscreenPreview';
 import { Preview } from '@/features/editor/Preview';
 import { Toolbar } from '@/features/editor/Toolbar';
 import { makeCover } from '@/features/editor/cover';
@@ -132,14 +133,19 @@ function EditorBody({ project }: { project: Project }) {
   }, [resources, resSV]);
 
   const [size, setSize] = useState({ width: 0, height: 0 });
+  // Em tela cheia, o player desenha no tamanho da tela (senão a imagem fica borrada).
+  const [fullscreen, setFullscreen] = useState(false);
+  const [fullSize, setFullSize] = useState({ width: 0, height: 0 });
+  const renderSize = fullscreen && fullSize.width > 0 ? fullSize : size;
+  const closeFullscreen = useCallback(() => setFullscreen(false), []);
   const player = usePreviewPlayer({
     // Fora de foco (tela de exportação), o preview larga os decodificadores.
     composition: focused ? composition : null,
     duration: plan.duration / 1_000_000,
     plan: planSV,
     resources: resSV,
-    width: size.width,
-    height: size.height,
+    width: renderSize.width,
+    height: renderSize.height,
   });
 
   const runtime: EditorRuntime = useMemo(
@@ -226,7 +232,14 @@ function EditorBody({ project }: { project: Project }) {
           </View>
         ) : null}
         <Preview project={project} plan={plan} resources={resources} player={player} size={size} onSize={setSize} />
-        <PlaybackBar player={player} durationUs={plan.duration} />
+        <PlaybackBar
+          player={player}
+          durationUs={plan.duration}
+          onFullscreen={() => {
+            select(null);
+            setFullscreen(true);
+          }}
+        />
 
         <View style={{ height: bottomHeight + insets.bottom, paddingBottom: insets.bottom, backgroundColor: colors.bg }}>
           {panel ? (
@@ -244,6 +257,15 @@ function EditorBody({ project }: { project: Project }) {
               Toque em + para adicionar vídeos e fotos.
             </Txt>
           </View>
+        ) : null}
+        {fullscreen ? (
+          <FullscreenPreview
+            player={player}
+            aspect={plan.width / plan.height}
+            durationUs={plan.duration}
+            onSize={setFullSize}
+            onClose={closeFullscreen}
+          />
         ) : null}
         <Toast toast={toast} />
       </View>

@@ -288,6 +288,7 @@ export interface Project {
   texts: TextItem[];
   audios: AudioClip[];
   captions: CaptionTrack;
+  /** Instante da timeline usado como capa (null: o começo). */
   coverTime: Micros | null;
   bakes: Record<string, Bake>;
   audioRenders: Record<string, AudioRender>;

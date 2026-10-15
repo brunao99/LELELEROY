@@ -18,8 +18,8 @@ Reordenar clipes segurando e arrastando,editor,must,yes,yes,F04; código pronto 
 Desfazer e refazer,editor,must,yes,yes,F16; histórico de 100 passos; gestos contínuos viram um passo
 Silenciar o áudio original de todos os clipes,editor,should,yes,yes,código pronto e compilado; falta testar num aparelho
 Ímã na agulha e nas bordas dos clipes,editor,should,yes,yes,com vibração ao encaixar
-Preview em tela cheia,editor,could,yes,no,
-Escolher a capa do vídeo,editor,could,yes,no,o modelo tem coverTime; falta a tela
+Preview em tela cheia,editor,could,yes,yes,renderiza no tamanho da tela enquanto aberta
+Escolher a capa do vídeo,editor,could,yes,yes,quadro da agulha vira a capa em Meus projetos
 Cortar início e fim arrastando as alças,clipe,must,yes,yes,F02; código pronto e compilado; falta testar num aparelho
 Dividir o clipe na agulha,clipe,must,yes,yes,F03; código pronto e compilado; falta testar num aparelho
 Excluir clipe e fechar o espaço,clipe,must,yes,yes,F03; código pronto e compilado; falta testar num aparelho
@@ -27,8 +27,8 @@ Duplicar clipe,clipe,should,yes,yes,código pronto e compilado; falta testar num
 Girar 90° espelhar e recortar,clipe,should,yes,yes,"S19; recorte por proporções centradas, sem recorte livre"
 Mover e escalar o clipe na preview com gestos,clipe,should,yes,yes,"arrastar, pinça e girar com dois dedos"
 Substituir a mídia do clipe,clipe,could,yes,yes,código pronto e compilado; falta testar num aparelho
-Congelar quadro,clipe,could,yes,no,
-Reproduzir ao contrário,clipe,could,yes,no,
+Congelar quadro,clipe,could,yes,yes,quadro exato vira foto de 3 s entre as partes do clipe (faixa principal)
+Reproduzir ao contrário,clipe,could,yes,yes,"cópia invertida em blocos, até 1440p; combina com velocidade"
 Opacidade do clipe,clipe,could,yes,yes,código pronto e compilado; falta testar num aparelho
 Animações de entrada e saída do clipe,clipe,could,yes,yes,10 animações próprias
 Keyframes de posição escala rotação e opacidade,clipe,could,yes,no,fonte 1 e 2

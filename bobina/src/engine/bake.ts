@@ -51,7 +51,7 @@ function bakeSize(asset: MediaAsset, maxSide = BAKE_MAX_SIDE): { width: number; 
 }
 
 /** Desenha o quadro em pé, ocupando a superfície inteira. */
-function drawUpright(
+export function drawUpright(
   canvas: ReturnType<SkSurface['getCanvas']>,
   frame: { texture: unknown; width: number; height: number; rotation: number } | undefined,
   width: number,

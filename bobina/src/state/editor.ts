@@ -38,7 +38,8 @@ export type PanelId =
   | 'frame'
   | 'animation'
   | 'overlay'
-  | 'opacity';
+  | 'opacity'
+  | 'cover';
 
 export interface Toast {
   id: number;
