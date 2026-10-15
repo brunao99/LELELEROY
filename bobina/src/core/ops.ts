@@ -37,6 +37,7 @@ import type {
   AudioSource,
   Background,
   Caption,
+  CaptionHighlight,
   CaptionSource,
   CaptionWord,
   KeyframeEase,
@@ -950,6 +951,10 @@ export function updateCaptionText(project: Project, id: string, text: string): P
 
 export function setCaptionStyle(project: Project, patch: Partial<TextStyle>): Project {
   return { ...project, captions: { ...project.captions, style: { ...project.captions.style, ...patch } } };
+}
+
+export function setCaptionHighlight(project: Project, highlight: CaptionHighlight | null): Project {
+  return { ...project, captions: { ...project.captions, highlight } };
 }
 
 export function setCaptionPosition(project: Project, position: { x: number; y: number }): Project {

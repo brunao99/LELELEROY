@@ -7,6 +7,7 @@ import {
   dismissCaptionsWarning,
   mergeCaptionWithNext,
   removeItem,
+  setCaptionHighlight,
   setCaptionPosition,
   setCaptionStyle,
   setCaptions,
@@ -19,6 +20,7 @@ import { NoSpeechError, downloadModel, isModelReady, transcribeProject } from '@
 import { useEditor } from '@/state/editor';
 import { Button, IconButton, Row } from '@/ui/Button';
 import { ChoiceRow } from '@/ui/Chip';
+import { ColorRow } from '@/ui/ColorRow';
 import { EmptyState, ProgressBar } from '@/ui/Feedback';
 import { Panel, SectionLabel } from '@/ui/Panel';
 import { Slider } from '@/ui/Slider';
@@ -230,11 +232,34 @@ export function CaptionsBatchPanel({ project }: { project: Project }) {
   );
 }
 
+const HIGHLIGHTS = [
+  { value: 'none' as const, label: 'Nenhum' },
+  { value: 'color' as const, label: 'Cor da palavra' },
+  { value: 'box' as const, label: 'Fundo na palavra' },
+];
+
 export function CaptionStylePanel({ project }: { project: Project }) {
   const { apply, endGesture, close } = usePanelActions();
+  const highlight = project.captions.highlight ?? null;
+  const timed = project.captions.items.some((c) => c.words && c.words.length > 0);
   return (
     <Panel title="Estilo das legendas" onDone={close}>
       <Note>Vale para todas as legendas.</Note>
+      <SectionLabel>Destaque da palavra falada</SectionLabel>
+      <ChoiceRow
+        options={HIGHLIGHTS}
+        value={highlight?.mode ?? 'none'}
+        onChange={(v) =>
+          apply((p) => setCaptionHighlight(p, v === 'none' ? null : { mode: v, color: highlight?.color ?? (v === 'box' ? '#ffb547' : '#ffd84d') }))
+        }
+      />
+      {highlight ? (
+        <ColorRow label="Cor do destaque" value={highlight.color} onChange={(c) => apply((p) => setCaptionHighlight(p, { ...highlight, color: c }))} />
+      ) : null}
+      {highlight && !timed ? (
+        <Note>Precisa do tempo de cada palavra: gere as legendas de novo pelo reconhecimento automático.</Note>
+      ) : null}
+      <SectionLabel>Texto</SectionLabel>
       <TextStyleEditor
         style={project.captions.style}
         keyPrefix="captions"

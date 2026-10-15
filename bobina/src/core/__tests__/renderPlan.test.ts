@@ -1,7 +1,7 @@
 import { makeMainClip } from '../defaults';
 import { designSize, exportSize, sizeForAspect } from '../geometry';
-import { addText, insertMainClips, setCaptions, setRatio, setTransition, updateVisual } from '../ops';
-import { activeMainAt, buildRenderPlan, captionAt, clipBox, rotatedSize } from '../renderPlan';
+import { addText, insertMainClips, setCaptionHighlight, setCaptions, setRatio, setTransition, updateVisual } from '../ops';
+import { activeMainAt, activeWord, buildRenderPlan, captionAt, clipBox, rotatedSize, wordRanges } from '../renderPlan';
 import { sec } from '../time';
 import { imageAsset, projectWith, videoAsset } from './fixtures';
 
@@ -78,8 +78,8 @@ describe('por quadro', () => {
 
   it('acha a legenda certa', () => {
     const items = [
-      { id: 'a', start: 0, end: sec(1), text: 'a', version: '' },
-      { id: 'b', start: sec(2), end: sec(3), text: 'b', version: '' },
+      { id: 'a', start: 0, end: sec(1), text: 'a', version: '', words: null },
+      { id: 'b', start: sec(2), end: sec(3), text: 'b', version: '', words: null },
     ];
     expect(captionAt(items, sec(0.5))?.id).toBe('a');
     expect(captionAt(items, sec(1.5))).toBeNull();
@@ -99,5 +99,47 @@ describe('por quadro', () => {
     expect(rotatedSize(1920, 1080, 90)).toEqual({ width: 1080, height: 1920 });
     expect(rotatedSize(1920, 1080, -90)).toEqual({ width: 1080, height: 1920 });
     expect(rotatedSize(1920, 1080, 180)).toEqual({ width: 1920, height: 1080 });
+  });
+});
+
+describe('destaque palavra por palavra', () => {
+  const caption = {
+    id: 's',
+    start: 0,
+    end: sec(2),
+    text: 'oi tudo bem',
+    words: [
+      { text: 'oi', start: 0, end: sec(0.3) },
+      { text: 'tudo', start: sec(0.5), end: sec(0.9) },
+      { text: 'bem', start: sec(1.2), end: sec(1.6) },
+    ],
+  };
+
+  it('acha cada palavra no texto (para o Skia medir)', () => {
+    expect(wordRanges(caption)!.map((w) => [w.from, w.to])).toEqual([
+      [0, 2],
+      [3, 7],
+      [8, 11],
+    ]);
+    expect(wordRanges({ ...caption, text: 'outro texto' })).toBeNull();
+  });
+
+  it('a palavra fica destacada até a próxima começar', () => {
+    const words = wordRanges(caption)!;
+    expect(activeWord(words, sec(0.1))).toBe(0);
+    expect(activeWord(words, sec(0.4))).toBe(0);
+    expect(activeWord(words, sec(1))).toBe(1);
+    expect(activeWord(words, sec(1.9))).toBe(2);
+    expect(activeWord([{ start: sec(1), end: sec(2), from: 0, to: 2 }], 0)).toBe(-1);
+  });
+
+  it('o plano só leva as palavras com o destaque ligado, e a versão muda com a cor', () => {
+    let p = setCaptions(projectWith(5), [caption], 'pt', 'video');
+    expect(buildRenderPlan(p).captions.items[0]!.words).toBeNull();
+    p = setCaptionHighlight(p, { mode: 'color', color: '#ffd84d' });
+    const a = buildRenderPlan(p).captions.items[0]!;
+    expect(a.words).toHaveLength(3);
+    const b = buildRenderPlan(setCaptionHighlight(p, { mode: 'color', color: '#ff0000' })).captions.items[0]!;
+    expect(b.version).not.toBe(a.version);
   });
 });

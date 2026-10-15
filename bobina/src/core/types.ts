@@ -265,6 +265,12 @@ export interface Caption {
 
 export type CaptionSource = 'video' | 'voiceover' | 'both';
 
+/** Destaque da palavra que está sendo falada: muda a cor dela ou põe um fundo atrás. */
+export interface CaptionHighlight {
+  mode: 'color' | 'box';
+  color: string;
+}
+
 export interface CaptionTrack {
   items: Caption[];
   style: TextStyle;
@@ -274,6 +280,8 @@ export interface CaptionTrack {
   source: CaptionSource;
   /** Quando cortes ou mudanças de velocidade podem ter tirado as legendas de sincronia. */
   maybeOutOfSync: boolean;
+  /** Só funciona nas legendas com o tempo de cada palavra (as geradas automaticamente). */
+  highlight?: CaptionHighlight | null;
 }
 
 export type Background =

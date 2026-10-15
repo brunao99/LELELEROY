@@ -13,7 +13,8 @@ import {
   type SkTypefaceFontProvider,
 } from '@shopify/react-native-skia';
 
-import type { TextStyle } from '@/core/types';
+import type { RenderWord } from '@/core/renderPlan';
+import type { CaptionHighlight, TextStyle } from '@/core/types';
 
 import { fontInfo } from './fonts';
 
@@ -26,6 +27,10 @@ export interface TextParts {
   /** Margem do fundo em volta do texto. */
   padding: number;
   fontSize: number;
+  /** Legendas com destaque: retângulos de cada palavra, no espaço do parágrafo. */
+  wordRects?: { x: number; y: number; width: number; height: number }[][];
+  /** Destaque em cor: o mesmo parágrafo na cor do destaque (mesmo layout). */
+  accent?: SkParagraph | null;
 }
 
 const ALIGN: Record<TextStyle['align'], TextAlign> = {
@@ -124,4 +129,30 @@ export function buildTextParts(
     stroke = build(content, style, fontSize, provider, width, paint);
   }
   return { fill, stroke, width, height: fill.getHeight(), padding: fontSize * 0.25, fontSize };
+}
+
+/**
+ * Legenda: linhas equilibradas e, com destaque palavra por palavra, os
+ * retângulos de cada palavra (calculados aqui, uma vez, para o desenho de cada
+ * quadro só ler números) e o parágrafo na cor do destaque.
+ */
+export function buildCaptionParts(
+  text: string,
+  style: TextStyle,
+  shortSide: number,
+  maxWidth: number,
+  provider: SkTypefaceFontProvider,
+  words: RenderWord[] | null,
+  highlight: CaptionHighlight | null,
+): TextParts {
+  const parts = buildTextParts(text, style, shortSide, maxWidth, provider, true);
+  if (!words || !highlight) return parts;
+  const wordRects = words.map((w) =>
+    parts.fill.getRectsForRange(w.from, w.to).map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height })),
+  );
+  const accent =
+    highlight.mode === 'color'
+      ? buildTextParts(text, { ...style, color: highlight.color, shadow: null }, shortSide, maxWidth, provider, true).fill
+      : null;
+  return { ...parts, wordRects, accent };
 }

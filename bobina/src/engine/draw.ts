@@ -20,13 +20,14 @@ import { liveState, type KeyState } from '@/core/keyframes';
 import { combine, itemMotion, transitionFrame, type MotionState } from '@/core/motion';
 import {
   activeMainAt,
+  activeWord,
   captionAt,
   clipBox,
   rotatedSize,
   type RenderClip,
   type RenderPlan,
 } from '@/core/renderPlan';
-import type { BlendKind, Micros, TextStyle, Transform } from '@/core/types';
+import type { BlendKind, CaptionHighlight, Micros, TextStyle, Transform } from '@/core/types';
 
 import { gradeUniforms } from './shaders';
 import type { TextParts } from './text';
@@ -213,6 +214,12 @@ function drawBackground(
   canvas.restore();
 }
 
+/** A palavra falada de uma legenda: os retângulos dela e como destacar. */
+interface WordHighlight {
+  rects: { x: number; y: number; width: number; height: number }[];
+  highlight: CaptionHighlight;
+}
+
 /** Desenha um texto (ou legenda) centrado na posição do transform. */
 function drawText(
   canvas: SkCanvas,
@@ -222,6 +229,7 @@ function drawText(
   motion: MotionState,
   W: number,
   H: number,
+  word: WordHighlight | null = null,
 ) {
   'worklet';
   const alpha = style.opacity * motion.opacity;
@@ -251,8 +259,29 @@ function drawText(
       bgPaint,
     );
   }
+  if (word && word.highlight.mode === 'box') {
+    // Fundo arredondado atrás da palavra falada.
+    const pad = parts.fontSize * 0.12;
+    const boxPaint = Skia.Paint();
+    boxPaint.setAntiAlias(true);
+    boxPaint.setColor(Skia.Color(word.highlight.color));
+    for (const r of word.rects) {
+      const rr = parts.fontSize * 0.18;
+      canvas.drawRRect(Skia.RRectXY(Skia.XYWHRect(x + r.x - pad, y + r.y - pad * 0.5, r.width + pad * 2, r.height + pad), rr, rr), boxPaint);
+    }
+  }
   if (parts.stroke) parts.stroke.paint(canvas, x, y);
   parts.fill.paint(canvas, x, y);
+  if (word && word.highlight.mode === 'color' && parts.accent) {
+    // A mesma legenda na cor do destaque, recortada só na palavra falada.
+    const accent = parts.accent;
+    canvas.save();
+    const builder = Skia.PathBuilder.Make();
+    for (const r of word.rects) builder.addRect(Skia.XYWHRect(x + r.x, y + r.y, r.width, r.height));
+    canvas.clipPath(builder.detach(), ClipOp.Intersect, true);
+    accent.paint(canvas, x, y);
+    canvas.restore();
+  }
   if (layered) canvas.restore();
   canvas.restore();
 }
@@ -356,6 +385,13 @@ export function drawProject(
     const parts = res.captions[caption.id];
     if (parts) {
       const position = plan.captions.position;
+      const highlight = plan.captions.highlight;
+      let word: WordHighlight | null = null;
+      if (highlight && caption.words && parts.wordRects) {
+        const i = activeWord(caption.words, t);
+        const rects = i >= 0 ? parts.wordRects[i] : undefined;
+        if (rects && rects.length > 0) word = { rects, highlight };
+      }
       drawText(
         canvas,
         parts,
@@ -364,6 +400,7 @@ export function drawProject(
         { opacity: 1, scale: 1, dx: 0, dy: 0, rotation: 0 },
         W,
         H,
+        word,
       );
     }
   }

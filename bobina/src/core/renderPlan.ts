@@ -11,6 +11,7 @@ import type {
   Anim,
   Background,
   BlendKind,
+  CaptionHighlight,
   Crop,
   Keyframe,
   LoopAnimKind,
@@ -79,12 +80,21 @@ export interface RenderText {
   layer: number;
 }
 
+/** Uma palavra da legenda: tempo e posição no texto (índices UTF-16, como o Skia usa). */
+export interface RenderWord {
+  start: Micros;
+  end: Micros;
+  from: number;
+  to: number;
+}
+
 export interface RenderCaption {
   id: string;
   start: Micros;
   end: Micros;
   text: string;
   version: string;
+  words: RenderWord[] | null;
 }
 
 export interface RenderPlan {
@@ -95,7 +105,7 @@ export interface RenderPlan {
   main: RenderMainSlot[];
   overlays: RenderClip[];
   texts: RenderText[];
-  captions: { items: RenderCaption[]; position: { x: number; y: number }; style: TextStyle };
+  captions: { items: RenderCaption[]; position: { x: number; y: number }; style: TextStyle; highlight: CaptionHighlight | null };
 }
 
 function renderClip(project: Project, clip: MainClip | OverlayClip, start: Micros): RenderClip | null {
@@ -124,6 +134,30 @@ function renderClip(project: Project, clip: MainClip | OverlayClip, start: Micro
     effect: clip.effect && clip.effect.amount > 0 ? clip.effect : null,
     chroma: clip.chroma ? chromaUniforms(clip.chroma) : null,
   };
+}
+
+/** Onde cada palavra está no texto da legenda; null se as palavras não batem com o texto. */
+export function wordRanges(caption: { text: string; words?: { text: string; start: Micros; end: Micros }[] }): RenderWord[] | null {
+  const words = caption.words;
+  if (!words || words.length === 0 || words.map((w) => w.text).join(' ') !== caption.text) return null;
+  const out: RenderWord[] = [];
+  let at = 0;
+  for (const w of words) {
+    out.push({ start: w.start, end: w.end, from: at, to: at + w.text.length });
+    at += w.text.length + 1;
+  }
+  return out;
+}
+
+/** Palavra sendo falada no instante `t`: fica destacada até a próxima começar. */
+export function activeWord(words: RenderWord[], t: Micros): number {
+  'worklet';
+  let found = -1;
+  for (let i = 0; i < words.length; i++) {
+    if (words[i]!.start <= t) found = i;
+    else break;
+  }
+  return found;
 }
 
 function styleVersion(text: string, style: TextStyle): string {
@@ -167,13 +201,19 @@ export function buildRenderPlan(project: Project): RenderPlan {
       layer: t.layer,
     }));
   const captionStyle = project.captions.style;
-  const captions = project.captions.items.map((c) => ({
-    id: c.id,
-    start: c.start,
-    end: c.end,
-    text: c.text,
-    version: styleVersion(c.text, captionStyle),
-  }));
+  const highlight = project.captions.highlight ?? null;
+  const captions = project.captions.items.map((c) => {
+    const words = highlight ? wordRanges(c) : null;
+    return {
+      id: c.id,
+      start: c.start,
+      end: c.end,
+      text: c.text,
+      // O destaque em cor pede um segundo parágrafo, na cor dele.
+      version: `${styleVersion(c.text, captionStyle)}${words && highlight ? `\u0000${highlight.mode}${highlight.color}` : ''}`,
+      words,
+    };
+  });
   return {
     width: size.width,
     height: size.height,
@@ -182,7 +222,7 @@ export function buildRenderPlan(project: Project): RenderPlan {
     main,
     overlays,
     texts,
-    captions: { items: captions, position: project.captions.position, style: captionStyle },
+    captions: { items: captions, position: project.captions.position, style: captionStyle, highlight },
   };
 }
 

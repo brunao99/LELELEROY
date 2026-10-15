@@ -65,7 +65,7 @@ Aplicar um estilo a todas as legendas,legendas,must,yes,yes,S16; código pronto 
 Escolher a origem: áudio do vídeo narração ou ambos,legendas,should,yes,yes,fonte 5; código pronto e compilado; falta testar num aparelho
 Edição em lote de todas as legendas,legendas,should,yes,yes,"S16; editar, dividir no cursor, juntar e excluir"
 Ajustar o tempo de cada legenda na timeline,legendas,should,yes,yes,código pronto e compilado; falta testar num aparelho
-Destaque palavra por palavra,legendas,could,yes,no,a confirmar no app
+Destaque palavra por palavra,legendas,could,yes,yes,cor da palavra ou fundo atrás dela; usa o tempo de cada palavra da transcrição
 Filtros com intensidade,filtros,must,yes,yes,filtros feitos do zero; 12 filtros próprios
 Ajustes de brilho contraste saturação exposição e temperatura,filtros,must,yes,yes,S11; código pronto e compilado; falta testar num aparelho
 Ajustes de realces sombras nitidez vinheta e matiz,filtros,should,yes,yes,S11; shader SkSL próprio

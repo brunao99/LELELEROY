@@ -11,7 +11,7 @@ import { fileUri } from '@/storage/paths';
 
 import type { DrawResources } from './draw';
 import { fxEffect, gradeEffect } from './shaders';
-import { buildTextParts, type TextParts } from './text';
+import { buildCaptionParts, buildTextParts, type TextParts } from './text';
 
 /** Largura máxima de uma linha de texto, em fração da largura do quadro. */
 export const TEXT_MAX_WIDTH = 0.9;
@@ -58,7 +58,7 @@ export function buildAllText(plan: RenderPlan, provider: SkTypefaceFontProvider)
   }
   const captions: Record<string, TextParts> = {};
   for (const c of plan.captions.items) {
-    captions[c.id] = buildTextParts(c.text, plan.captions.style, shortSide, plan.width * CAPTION_MAX_WIDTH, provider, true);
+    captions[c.id] = buildCaptionParts(c.text, plan.captions.style, shortSide, plan.width * CAPTION_MAX_WIDTH, provider, c.words, plan.captions.highlight);
   }
   return { texts, captions };
 }
@@ -130,7 +130,7 @@ export function useDrawResources(
     const captions: Record<string, TextParts> = {};
     for (const c of plan.captions.items) {
       captions[c.id] = cachedParts(captionCache, usedCaptions, `${c.id}:${c.version}:${size}`, () =>
-        buildTextParts(c.text, plan.captions.style, shortSide, plan.width * CAPTION_MAX_WIDTH, provider, true),
+        buildCaptionParts(c.text, plan.captions.style, shortSide, plan.width * CAPTION_MAX_WIDTH, provider, c.words, plan.captions.highlight),
       );
     }
     prune(captionCache, usedCaptions);
