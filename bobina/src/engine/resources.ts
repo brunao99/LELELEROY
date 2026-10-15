@@ -4,12 +4,15 @@
  */
 import { Skia, type SkImage, type SkTypefaceFontProvider } from '@shopify/react-native-skia';
 import { useEffect, useMemo, useState } from 'react';
+import { scheduleOnUI } from 'react-native-worklets';
 
+import { parseMaskFile } from '@/core/cutout';
 import type { RenderPlan } from '@/core/renderPlan';
 import type { Project } from '@/core/types';
-import { fileUri } from '@/storage/paths';
+import { fileUri, projectFile } from '@/storage/paths';
 
 import type { DrawResources } from './draw';
+import { installMasks, removeMasks } from './maskStore';
 import { fxEffect, gradeEffect } from './shaders';
 import { buildCaptionParts, buildTextParts, type TextParts } from './text';
 
@@ -48,6 +51,34 @@ export async function loadImages(project: Project, ids: string[]): Promise<Recor
   );
   return out;
 }
+
+/** Máscaras do recorte já lidas do arquivo (comprimidas). */
+export interface LoadedMasks {
+  data: Uint8Array;
+  offsets: Uint32Array;
+  size: number;
+}
+
+/** Arquivos de máscara que o desenho do projeto usa. */
+export function cutoutFiles(project: Project): string[] {
+  const files = new Set<string>();
+  for (const c of [...project.main, ...project.overlays]) if (c.cutout) files.add(c.cutout.file);
+  return [...files];
+}
+
+export async function readMasks(projectId: string, file: string): Promise<LoadedMasks | null> {
+  try {
+    const f = projectFile(projectId, file);
+    if (!f.exists) return null;
+    const parsed = parseMaskFile(await f.bytes());
+    return { data: parsed.data, offsets: parsed.offsets, size: parsed.header.size };
+  } catch {
+    return null;
+  }
+}
+
+/** Máscaras já instaladas no runtime do preview (só existe um editor aberto por vez). */
+const masksOnUI = new Set<string>();
 
 /** Monta os parágrafos de todos os textos e legendas do plano (sem cache: para a exportação). */
 export function buildAllText(plan: RenderPlan, provider: SkTypefaceFontProvider) {
@@ -96,6 +127,7 @@ export function useDrawResources(
   provider: SkTypefaceFontProvider | null,
 ): DrawResources | null {
   const [images, setImages] = useState<Record<string, SkImage>>({});
+  const [masks, setMasks] = useState(0);
 
   const imageIds = project ? imageAssetIds(project).sort().join(',') : '';
   useEffect(() => {
@@ -113,6 +145,32 @@ export function useDrawResources(
     // `project` muda a cada edição; só importa a lista de fotos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageIds, project?.id]);
+
+  // Recortes: as máscaras vão para o runtime do preview uma vez; o desenho pede quadro a quadro.
+  const cutoutKeys = project ? cutoutFiles(project).sort().join(',') : '';
+  useEffect(() => {
+    if (!project) return;
+    const wanted = new Set(cutoutKeys ? cutoutKeys.split(',') : []);
+    for (const key of [...masksOnUI]) {
+      if (wanted.has(key)) continue;
+      scheduleOnUI(removeMasks, key);
+      masksOnUI.delete(key);
+    }
+    let cancelled = false;
+    for (const key of wanted) {
+      if (masksOnUI.has(key)) continue;
+      readMasks(project.id, key).then((loaded) => {
+        if (cancelled || !loaded) return;
+        scheduleOnUI(installMasks, key, loaded.data, loaded.offsets, loaded.size);
+        masksOnUI.add(key);
+        setMasks((n) => n + 1);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cutoutKeys, project?.id]);
 
   return useMemo(() => {
     if (!plan || !provider) return null;
@@ -134,6 +192,6 @@ export function useDrawResources(
       );
     }
     prune(captionCache, usedCaptions);
-    return { images, texts, captions, grade: gradeEffect(), fx: fxEffect() };
-  }, [plan, provider, images]);
+    return { images, texts, captions, grade: gradeEffect(), fx: fxEffect(), masks };
+  }, [plan, provider, images, masks]);
 }

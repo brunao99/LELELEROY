@@ -24,7 +24,7 @@ import type { ExportFps, ExportResolution, Project } from '@/core/types';
 import { runAudioRender, runBake } from '@/engine/bake';
 import { ExportCancelled, encoderConfig, renderVideo } from '@/engine/exporter';
 import { FONT_SOURCES } from '@/engine/fonts';
-import { buildAllText, imageAssetIds, loadImages } from '@/engine/resources';
+import { buildAllText, cutoutFiles, imageAssetIds, loadImages, readMasks, type LoadedMasks } from '@/engine/resources';
 import { fxEffect, gradeEffect } from '@/engine/shaders';
 import { absolutePath, ensureDir, exportsDir, toPlainPath } from '@/storage/paths';
 import { pauseBackgroundWork, useEditor } from '@/state/editor';
@@ -151,6 +151,11 @@ export default function ExportScreen() {
       const plan = buildRenderPlan(current);
       const images = await loadImages(current, imageAssetIds(current));
       const { texts, captions } = buildAllText(plan, provider);
+      const masks: Record<string, LoadedMasks> = {};
+      for (const file of cutoutFiles(current)) {
+        const loaded = await readMasks(current.id, file);
+        if (loaded) masks[file] = loaded;
+      }
       const composition = pending.composition ?? { duration: plan.duration / 1_000_000, items: [] };
 
       // 3. Exportar.
@@ -166,6 +171,7 @@ export default function ExportScreen() {
         composition,
         plan,
         resources: { images, texts, captions, grade: gradeEffect(), fx: fxEffect() },
+        masks,
         onProgress: (done, total) => setStage({ kind: 'rendering', fraction: done / total }),
         signal: controller.signal,
       });

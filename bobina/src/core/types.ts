@@ -118,6 +118,35 @@ export interface ChromaKey {
   smoothness: number;
 }
 
+/**
+ * Recorte com laço (IA no aparelho): uma máscara do objeto escolhido por quadro
+ * da mídia, guardadas num arquivo do projeto (ver core/cutout.ts).
+ */
+export interface Cutout {
+  /** Arquivo das máscaras, relativo à pasta do projeto. */
+  file: string;
+  /** Trecho da mídia coberto pelas máscaras. */
+  from: Micros;
+  to: Micros;
+  /** Máscaras por segundo, no tempo da mídia. */
+  fps: number;
+  /** Tira o objeto e deixa o fundo. */
+  invert: boolean;
+  /** Borda: 0 = afiada, seguindo a imagem; 1 = bem suave. */
+  feather: number;
+  /** O que foi desenhado, para ajustar depois. */
+  prompt: CutoutPrompt;
+}
+
+export interface CutoutPrompt {
+  /** Instante da mídia em que o laço foi desenhado. */
+  time: Micros;
+  /** Laço normalizado (0..1) sobre o quadro em pé. */
+  lasso: { x: number; y: number }[];
+  /** Toques de ajuste: incluir ou excluir a região tocada. */
+  clicks: { x: number; y: number; include: boolean }[];
+}
+
 export type BlendKind = 'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'add';
 
 export interface Visual {
@@ -135,6 +164,7 @@ export interface Visual {
   keyframes?: Keyframe[];
   effect?: VideoEffect | null;
   chroma?: ChromaKey | null;
+  cutout?: Cutout | null;
 }
 
 export interface AudioProps {

@@ -15,6 +15,7 @@ import {
   type SkRuntimeEffect,
 } from '@shopify/react-native-skia';
 
+import { maskIndexAt } from '@/core/cutout';
 import { blurSigma, effectMotion, shaderKind } from '@/core/effects';
 import { liveState, type KeyState } from '@/core/keyframes';
 import { combine, itemMotion, transitionFrame, type MotionState } from '@/core/motion';
@@ -27,8 +28,10 @@ import {
   type RenderClip,
   type RenderPlan,
 } from '@/core/renderPlan';
+import { sourceTimeAt } from '@/core/timeline';
 import type { BlendKind, CaptionHighlight, Micros, TextStyle, Transform } from '@/core/types';
 
+import { maskImage, noMaskShader } from './maskStore';
 import { gradeUniforms } from './shaders';
 import type { TextParts } from './text';
 
@@ -40,8 +43,10 @@ export interface DrawResources {
   /** Parágrafos das legendas, por id da legenda. */
   captions: Record<string, TextParts>;
   grade: SkRuntimeEffect | null;
-  /** Efeitos e chroma key (engine/shaders.ts). */
+  /** Efeitos, chroma key e recorte (engine/shaders.ts). */
   fx: SkRuntimeEffect | null;
+  /** Versão das máscaras de recorte já carregadas no runtime (muda → redesenha). */
+  masks?: number;
 }
 
 interface ClipImage {
@@ -132,12 +137,20 @@ function drawClip(
     paint.setImageFilter(Skia.ImageFilter.MakeBlur(sigma, sigma, TileMode.Clamp, null));
   }
   const fxKind = shaderKind(effect?.kind);
-  const useFx = !!res.fx && (fxKind > 0 || !!clip.chroma);
+  // Recorte com laço: a máscara do instante da mídia que está na tela.
+  const cut = clip.cutout;
+  let mask: SkImage | null = null;
+  if (cut && clip.source === 'video') {
+    const media = sourceTimeAt(clip, Math.round(seconds * 1_000_000));
+    mask = maskImage(cut.key, maskIndexAt({ fps: cut.fps, from: cut.from, count: Number.MAX_SAFE_INTEGER }, media));
+  }
+  const useFx = !!res.fx && (fxKind > 0 || !!clip.chroma || !!mask);
   if ((clip.shader && res.grade) || useFx) {
-    // Efeitos e chroma primeiro (sobre a cor original), depois a correção de cor.
+    // Efeitos, chroma e recorte primeiro (sobre a cor original), depois a correção de cor.
     let shader = img.image.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Linear, MipmapMode.None);
     if (useFx && res.fx) {
       const key = clip.chroma;
+      const turns = ((Math.round(img.rotation / 90) % 4) + 4) % 4;
       shader = res.fx.makeShaderWithChildren(
         [
           texW,
@@ -150,8 +163,16 @@ function drawClip(
           key?.cr ?? 0,
           key?.similarity ?? 0,
           key?.smoothness ?? 0,
+          mask ? 1 : 0,
+          mask ? mask.width() : 1,
+          turns,
+          cut?.invert ? 1 : 0,
+          cut?.feather ?? 0,
         ],
-        [shader],
+        [
+          shader,
+          mask ? mask.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Nearest, MipmapMode.None) : noMaskShader(),
+        ],
       );
     }
     if (clip.shader && res.grade) {

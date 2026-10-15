@@ -73,7 +73,9 @@
             "minSdkVersion": 26
           }
         }
-      ]
+      ],
+      "onnxruntime-react-native",
+      "./plugins/withOnnxRuntime"
     ],
     "experiments": {
       "typedRoutes": true

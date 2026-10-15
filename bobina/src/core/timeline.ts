@@ -18,6 +18,7 @@ export function sourceTimeAt(
   clip: Pick<ClipBase, 'sourceIn' | 'sourceOut' | 'speed' | 'reverse'>,
   local: Micros,
 ): Micros {
+  'worklet';
   const t = clip.reverse ? clip.sourceOut - local * clip.speed : clip.sourceIn + local * clip.speed;
   return Math.round(Math.min(clip.sourceOut, Math.max(clip.sourceIn, t)));
 }

@@ -50,6 +50,21 @@ export interface RenderClip {
   keyframes: Keyframe[] | null;
   effect: VideoEffect | null;
   chroma: ChromaUniforms | null;
+  /** Trecho e ritmo da mídia, para achar a máscara do recorte de cada instante. */
+  sourceIn: Micros;
+  sourceOut: Micros;
+  speed: number;
+  reverse: boolean;
+  cutout: RenderCutout | null;
+}
+
+/** Recorte com laço: as máscaras ficam num arquivo do projeto (`key`), carregado à parte. */
+export interface RenderCutout {
+  key: string;
+  from: Micros;
+  fps: number;
+  invert: boolean;
+  feather: number;
 }
 
 export interface RenderTransition {
@@ -133,6 +148,14 @@ function renderClip(project: Project, clip: MainClip | OverlayClip, start: Micro
     keyframes: clip.keyframes && clip.keyframes.length > 0 ? clip.keyframes : null,
     effect: clip.effect && clip.effect.amount > 0 ? clip.effect : null,
     chroma: clip.chroma ? chromaUniforms(clip.chroma) : null,
+    sourceIn: clip.sourceIn,
+    sourceOut: clip.sourceOut,
+    speed: clip.speed,
+    reverse: !!clip.reverse,
+    cutout:
+      clip.cutout && asset.kind === 'video'
+        ? { key: clip.cutout.file, from: clip.cutout.from, fps: clip.cutout.fps, invert: clip.cutout.invert, feather: clip.cutout.feather }
+        : null,
   };
 }
 

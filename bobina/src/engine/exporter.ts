@@ -12,6 +12,7 @@ import {
   createSynchronizable,
   createWorkletRuntime,
   runOnRuntime,
+  runOnRuntimeAsync,
   scheduleOnRN,
   type WorkletRuntime,
 } from 'react-native-worklets';
@@ -20,6 +21,8 @@ import { compositionForWindow, planWindows, type Composition } from '@/core/comp
 import type { RenderPlan } from '@/core/renderPlan';
 
 import { drawProject, type DrawResources } from './draw';
+import { installMasks } from './maskStore';
+import type { LoadedMasks } from './resources';
 
 let runtime: WorkletRuntime | null = null;
 function exportRuntime(): WorkletRuntime {
@@ -37,6 +40,8 @@ export interface RenderJob {
   composition: Composition;
   plan: RenderPlan;
   resources: DrawResources;
+  /** Máscaras dos recortes, por arquivo (ver engine/resources.ts). */
+  masks?: Record<string, LoadedMasks>;
   onProgress?: (done: number, total: number) => void;
   signal?: AbortSignal;
 }
@@ -63,7 +68,15 @@ export function encoderConfig(width: number, height: number, fps: number, bitRat
   return { width, height, fps, bitRate, encoderName: null as string | null };
 }
 
-export function renderVideo(job: RenderJob): Promise<void> {
+export async function renderVideo(job: RenderJob): Promise<void> {
+  // As máscaras dos recortes vão uma vez para o runtime da exportação.
+  for (const [key, m] of Object.entries(job.masks ?? {})) {
+    await runOnRuntimeAsync(exportRuntime(), installMasks, key, m.data, m.offsets, m.size);
+  }
+  return renderFrames(job);
+}
+
+function renderFrames(job: RenderJob): Promise<void> {
   const { outPath, composition, plan, resources, onProgress, signal } = job;
   const config = encoderConfig(job.width, job.height, job.fps, job.bitRate);
   const windows = planWindows(composition);

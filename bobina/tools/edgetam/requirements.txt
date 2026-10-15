@@ -1,0 +1,9 @@
+# Mesmas versões usadas para conferir a paridade com o EdgeTAM oficial.
+# O torch (CPU) é instalado à parte, do índice do PyTorch (ver o workflow).
+transformers==5.19.0
+timm==1.0.30
+huggingface_hub==2.2.0
+safetensors==0.8.0
+onnx==1.23.2
+onnxruntime==1.24.3
+numpy
