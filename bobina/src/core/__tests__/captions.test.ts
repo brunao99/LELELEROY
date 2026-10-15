@@ -3,10 +3,12 @@ import {
   CAPTION_SAMPLE_RATE,
   captionParts,
   cleanSegmentText,
-  gateToSpeech,
   mixCaptionAudio,
+  packSpeech,
   segmentsToCaptions,
   segmentsToWords,
+  unpackSegments,
+  unpackTime,
   vadToSpeech,
   type WhisperSegment,
   type WhisperToken,
@@ -127,6 +129,21 @@ describe('legendas automáticas', () => {
     expect(caps.map((c) => c.text)).toEqual(['Obrigado por assistir']);
   });
 
+  it('com o VAD, a legenda sai da tela quando a fala acaba', () => {
+    const speech = [{ start: 0, end: sec(1) }];
+    // a última palavra "escorregou" até 3 s, dentro da música
+    const caps = segmentsToCaptions([seg([[' tudo', 0, 40], [' certo', 60, 300]])], sec(10), speech);
+    expect(caps[0]!.end).toBeLessThanOrEqual(sec(1.4));
+  });
+
+  it('com o VAD, legendas seguidas nunca se sobrepõem', () => {
+    const speech = [{ start: 0, end: sec(3) }];
+    const text = 'Hoje eu vou mostrar como eu edito os meus vídeos direto pelo celular agora mesmo.';
+    const caps = segmentsToCaptions([sentence(text, 0, 3)], sec(10), speech);
+    expect(caps.length).toBeGreaterThan(1);
+    for (let i = 1; i < caps.length; i++) expect(caps[i]!.start).toBeGreaterThanOrEqual(caps[i - 1]!.end);
+  });
+
   it('com o VAD, tira palavras que caem fora da fala', () => {
     const speech = [{ start: 0, end: sec(1.2) }];
     const caps = segmentsToCaptions([sentence('isso é fala', 0, 30), sentence('isso é música', 600, 30, 0.5)], sec(10), speech);
@@ -171,7 +188,7 @@ describe('legendas automáticas', () => {
     expect(cleanSegmentText('  bom  dia ')).toBe('bom dia');
   });
 
-  it('VAD: junta trechos e silencia o resto do áudio', () => {
+  it('VAD: junta trechos que se encostam', () => {
     const speech = vadToSpeech([
       { t0: 100, t1: 200 },
       { t0: 190, t1: 250 },
@@ -181,13 +198,45 @@ describe('legendas automáticas', () => {
       { start: sec(1), end: sec(2.5) },
       { start: sec(4), end: sec(4.5) },
     ]);
-    const audio = new Float32Array(CAPTION_SAMPLE_RATE * 6).fill(0.5);
-    gateToSpeech(audio, speech, 0);
-    expect(audio[Math.round(CAPTION_SAMPLE_RATE * 0.5)]).toBe(0);
-    expect(audio[Math.round(CAPTION_SAMPLE_RATE * 1.5)]).toBe(0.5);
-    expect(audio[Math.round(CAPTION_SAMPLE_RATE * 3.2)]).toBe(0);
-    expect(audio[Math.round(CAPTION_SAMPLE_RATE * 4.2)]).toBe(0.5);
-    expect(audio[Math.round(CAPTION_SAMPLE_RATE * 5.5)]).toBe(0);
+  });
+
+  it('emenda só a fala e devolve cada tempo ao lugar original', () => {
+    const rate = CAPTION_SAMPLE_RATE;
+    const audio = new Float32Array(rate * 10).fill(0.5);
+    const speech = [
+      { start: sec(2), end: sec(3) },
+      { start: sec(7), end: sec(8) },
+    ];
+    const { audio: packed, chunks } = packSpeech(audio, speech, sec(0.2), sec(0.3));
+    // 1,4 s de cada trecho (com a margem) + 0,3 s de silêncio depois de cada um
+    expect(packed.length).toBe(Math.round(rate * (1.4 + 0.3 + 1.4 + 0.3)));
+    expect(chunks).toEqual([
+      { packed: 0, original: sec(1.8), length: sec(1.4) },
+      { packed: sec(1.7), original: sec(6.8), length: sec(1.4) },
+    ]);
+    expect(unpackTime(sec(0.5), chunks)).toBe(sec(2.3));
+    expect(unpackTime(sec(2), chunks)).toBe(sec(7.1));
+    // no silêncio entre trechos, vai para a borda mais próxima
+    expect(unpackTime(sec(1.5), chunks)).toBe(sec(3.2));
+    expect(unpackTime(sec(1.6), chunks)).toBe(sec(6.8));
+    const [seg] = unpackSegments([{ text: ' oi', t0: 20, t1: 60, tokens: [{ text: ' oi', t0: 200, t1: 230, p: 0.9 }] }], chunks);
+    expect(seg).toMatchObject({ t0: 200, t1: 240 });
+    expect(seg!.tokens![0]).toMatchObject({ t0: 710, t1: 740 });
+  });
+
+  it('a primeira palavra de uma frase não fica presa antes de uma pausa', () => {
+    const caps = segmentsToCaptions(
+      [
+        seg([
+          [' Tudo', 0, 30],
+          [' certo.', 30, 60],
+          [' A', 62, 70, 0.6],
+        ]),
+        sentence('transcrição ficou boa.', 300, 30),
+      ],
+      sec(10),
+    );
+    expect(caps.map((c) => c.text)).toEqual(['Tudo certo.', 'A transcrição ficou boa.']);
   });
 
   it('escolhe os áudios pela origem', () => {

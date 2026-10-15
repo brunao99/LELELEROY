@@ -12,10 +12,11 @@ import {
   VAD_MODEL,
   WHISPER_MODELS,
   captionParts,
-  gateToSpeech,
   mixCaptionAudio,
+  packSpeech,
   prepareSpeechAudio,
   segmentsToCaptions,
+  unpackSegments,
   vadToSpeech,
   type SpeechRange,
   type WhisperModel,
@@ -148,15 +149,16 @@ export async function transcribeProject(
   for (let i = 0; i < audio.length; i += 64) energy = Math.max(energy, Math.abs(audio[i]!));
   if (audio.length === 0 || energy < 0.01) throw new NoSpeechError();
 
-  // Voz mais limpa e no volume certo; fora da fala, silêncio, para o modelo
-  // não transformar música e ruído em palavras.
+  // Voz mais limpa e no volume certo.
   prepareSpeechAudio(audio);
   if (signal?.aborted) throw new Error('cancelado');
   const speech = await detectSpeech(audio, signal);
-  if (speech) gateToSpeech(audio, speech);
+  // Só os trechos com fala, emendados: o modelo acerta muito mais o tempo de
+  // cada palavra e não tenta "ler" música e ruído.
+  const packed = speech ? packSpeech(audio, speech) : { audio, chunks: [] };
 
   const ctx = await whisperFor(model);
-  const { stop, promise } = ctx.transcribeData(toPcm16(audio), {
+  const { stop, promise } = ctx.transcribeData(toPcm16(packed.audio), {
     language: options.language,
     // Segmentos naturais (sem limite de tamanho): quem divide em legendas é o app,
     // palavra por palavra, sem nunca cortar uma palavra ao meio.
@@ -176,7 +178,7 @@ export async function transcribeProject(
   try {
     const result = await promise;
     if (result.isAborted) throw new Error('cancelado');
-    const captions = segmentsToCaptions(result.segments, total, speech);
+    const captions = segmentsToCaptions(unpackSegments(result.segments, packed.chunks), total, speech);
     if (captions.length === 0) throw new NoSpeechError();
     return captions;
   } finally {

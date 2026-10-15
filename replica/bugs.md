@@ -135,3 +135,12 @@ confirmar no celular está em "A verificar".
 - iOS inteiro: este ambiente não compila iOS (precisa de Mac ou EAS Build).
 
 Resumo: 15 bugs, 0 abertos (S1: 3, S2: 8, S3: 4, todos corrigidos). BUG-011 a 014 apareceram na revisão final do código.
+
+### BUG-016: legendas automáticas cortavam palavras e liam ruído como fala
+- Severidade: S2
+- Passos: gerar legendas de um vídeo com música, pausas ou barulho.
+- Esperado: legendas com palavras inteiras, divididas em pausas e frases, sem texto inventado.
+- Obtido: o Whisper recebia "no máximo 42 caracteres" e cortava no meio do token ("para ed" / "itar"); as legendas seguiam esses cortes; trechos de música viravam frases ("Legendas pela comunidade Amara.org") e o tempo das primeiras palavras caía segundos antes da fala.
+- Evidência: áudio de teste de 37 s (fala sintética em pt-BR + música + estalos) transcrito com whisper.cpp aqui; a configuração antiga reproduz "ed|itar".
+- Correção: patch no whisper.rn devolve tokens com tempo e probabilidade; detector de voz (Silero) e transcrição só dos trechos com fala, emendados, com os tempos devolvidos ao lugar; legendas montadas pelo app palavra por palavra (blocos por pausa/frase e quebras ótimas); filtros de marcas de som, frases inventadas, baixa confiança e laços. No mesmo áudio, o modelo "Preciso" acertou o texto inteiro com os tempos dentro de ~0,2 s.
+- Status: corrigido (commit local, ainda não enviado)

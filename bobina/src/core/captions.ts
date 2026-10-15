@@ -296,7 +296,29 @@ export function cleanWords(words: SpokenWord[], speech: SpeechRange[] | null): S
     const alone = (!prev || w.start - prev.end > 1_000_000) && (!next || next.start - w.end > 1_000_000);
     return !(alone && w.p < 0.4);
   });
-  return collapseLoops(isolated);
+  return collapseLoops(attachStranded(isolated));
+}
+
+/**
+ * O modelo às vezes deixa a primeira palavra de uma frase ("A", "E", "Então")
+ * no fim do trecho anterior, antes de uma pausa longa. Uma palavra assim, logo
+ * depois de um ponto final e longe da próxima, vai para junto da próxima.
+ */
+function attachStranded(words: SpokenWord[]): SpokenWord[] {
+  const out = words.map((w) => ({ ...w }));
+  for (let i = out.length - 2; i >= 0; i--) {
+    const w = out[i]!;
+    const next = out[i + 1]!;
+    const prev = out[i - 1];
+    const gap = next.start - w.end;
+    // Só palavras de ligação ("A", "E", "Então"…) ou incertas, logo depois de uma frase terminada.
+    const linking = LEAD_WORDS.has(bare(w.text)) || w.p < 0.7;
+    if (prev && endsSentence(prev) && linking && gap > CAPTION_PAUSE && !endsSentence(w) && !endsClause(w)) {
+      const length = Math.min(w.end - w.start, 400_000);
+      out[i] = { ...w, start: next.start - length, end: next.start };
+    }
+  }
+  return out;
 }
 
 /** Corta repetições em laço (a mesma sequência de 1 a 4 palavras 4 vezes ou mais seguidas). */
@@ -333,7 +355,7 @@ function collapseLoops(words: SpokenWord[]): SpokenWord[] {
 const LEAD_WORDS = new Set(
   (
     'a o as os um uma uns umas de do da dos das no na nos nas em ao aos à às e ou mas que se por pra para pro com sem ' +
-    'como quando onde porque meu minha seu sua nosso nossa esse essa este esta isso aquele aquela muito mais menos ' +
+    'como quando onde porque então entao qual quais quem cujo meu minha seu sua nosso nossa esse essa este esta isso aquele aquela muito mais menos ' +
     'the an of to in on at for with and or but if as by from my your our is are ' +
     'el la los las un una del al y en con por para pero mi tu su le les du des et ou mais'
   ).split(' '),
@@ -350,33 +372,6 @@ function joined(words: SpokenWord[]): string {
 const endsSentence = (w: SpokenWord) => /[.!?…]["”»]?$/.test(w.text);
 const endsClause = (w: SpokenWord) => /[,;:]["”»]?$/.test(w.text);
 
-/**
- * Onde quebrar um grupo que passou do limite: depois de pontuação, de
- * preferência; nunca deixando no fim uma palavra como "de" ou "que"; e o mais
- * cheio possível. Devolve quantas palavras ficam na legenda atual.
- */
-function bestBreak(group: SpokenWord[]): number {
-  let best = group.length - 1;
-  let bestScore = -Infinity;
-  const total = joined(group).length;
-  for (let k = group.length - 1; k >= 1; k--) {
-    const last = group[k - 1]!;
-    const left = joined(group.slice(0, k)).length;
-    let score = left / total; // mais cheio é melhor
-    if (endsSentence(last)) score += 3;
-    else if (endsClause(last)) score += 2;
-    if (LEAD_WORDS.has(bare(last.text))) score -= 2;
-    const gap = group[k]!.start - last.end;
-    score += Math.min(1, gap / 300_000); // uma pausa pequena também é um bom lugar
-    if (left < total * 0.3) score -= 2; // não deixa uma legenda de uma palavra só
-    if (score > bestScore) {
-      bestScore = score;
-      best = k;
-    }
-  }
-  return best;
-}
-
 export interface CaptionLayoutOptions {
   maxChars?: number;
   maxDuration?: Micros;
@@ -384,8 +379,55 @@ export interface CaptionLayoutOptions {
 }
 
 /**
- * Agrupa as palavras em legendas: quebra em pausas, no fim de frases e quando
- * passa do tamanho ou do tempo máximo, sempre entre palavras.
+ * Divide um bloco (frase sem pausas longas) em legendas. Testa todas as
+ * divisões possíveis e fica com a de menor custo: pedaços de tamanho parecido,
+ * quebras depois de vírgula ou em pequenas pausas, nunca terminando em "de",
+ * "que" e afins, e sem passar do tamanho ou do tempo máximo.
+ */
+function splitBlock(block: SpokenWord[], maxChars: number, maxDuration: Micros): SpokenWord[][] {
+  const n = block.length;
+  const lengths: number[] = [];
+  const pieceLength = (i: number, j: number) => {
+    let total = j - i - 1;
+    for (let k = i; k < j; k++) total += lengths[k]!;
+    return total;
+  };
+  for (const w of block) lengths.push(w.text.length);
+  const best = new Array<number>(n + 1).fill(Infinity);
+  const from = new Array<number>(n + 1).fill(0);
+  best[0] = 0;
+  for (let j = 1; j <= n; j++) {
+    for (let i = j - 1; i >= 0; i--) {
+      const length = pieceLength(i, j);
+      if (length > maxChars && j - i > 1) break;
+      const duration = block[j - 1]!.end - block[i]!.start;
+      if (duration > maxDuration && j - i > 1) break;
+      const last = block[j - 1]!;
+      let cost = 1; // cada legenda a mais custa
+      const fill = length / maxChars;
+      cost += (1 - fill) * (1 - fill) * 3; // prefere legendas cheias e parecidas
+      if (j < n) {
+        if (endsClause(last)) cost -= 0.8;
+        if (LEAD_WORDS.has(bare(last.text))) cost += 2.5;
+        const gap = block[j]!.start - last.end;
+        if (gap > 150_000) cost -= Math.min(0.6, gap / 500_000);
+        if (j - i === 1 && n > 2) cost += 1.5; // legenda de uma palavra só
+      }
+      if (best[i]! + cost < best[j]!) {
+        best[j] = best[i]! + cost;
+        from[j] = i;
+      }
+    }
+  }
+  const pieces: SpokenWord[][] = [];
+  for (let j = n; j > 0; j = from[j]!) pieces.unshift(block.slice(from[j]!, j));
+  return pieces;
+}
+
+/**
+ * Agrupa as palavras em legendas: primeiro em blocos, que fecham nas pausas e
+ * no fim das frases; depois cada bloco longo é dividido nos melhores pontos.
+ * Sempre entre palavras, nunca no meio de uma.
  */
 export function wordsToCaptions(words: SpokenWord[], totalDuration: Micros, options: CaptionLayoutOptions = {}): Caption[] {
   const maxChars = options.maxChars ?? CAPTION_MAX_CHARS;
@@ -402,29 +444,25 @@ export function wordsToCaptions(words: SpokenWord[], totalDuration: Micros, opti
     clean.push({ ...w, start, end });
   }
 
-  const groups: SpokenWord[][] = [];
+  const blocks: SpokenWord[][] = [];
   let current: SpokenWord[] = [];
   for (const w of clean) {
-    if (current.length > 0) {
-      const last = current[current.length - 1]!;
-      const length = joined(current).length;
+    const last = current[current.length - 1];
+    if (last) {
       const gap = w.start - last.end;
-      const tooLong = length + 1 + w.text.length > maxChars || w.end - current[0]!.start > maxDuration;
-      if (gap >= pause || (endsSentence(last) && length >= 12) || (endsClause(last) && length >= maxChars * 0.6)) {
-        groups.push(current);
+      const length = joined(current).length;
+      // Frase curta seguida de perto por outra que cabe junto: fica na mesma legenda.
+      const shortSentence = length < 12 && length + 1 + w.text.length <= maxChars && gap < pause / 2;
+      if (gap >= pause || (endsSentence(last) && !shortSentence)) {
+        blocks.push(current);
         current = [];
-      } else if (tooLong) {
-        const withNext = [...current, w];
-        const k = bestBreak(withNext);
-        groups.push(withNext.slice(0, k));
-        current = withNext.slice(k);
-        continue;
       }
     }
     current.push(w);
   }
-  if (current.length > 0) groups.push(current);
+  if (current.length > 0) blocks.push(current);
 
+  const groups = blocks.flatMap((b) => splitBlock(b, maxChars, maxDuration));
   const captions: Caption[] = groups.map((g) => ({
     id: newId('s'),
     start: g[0]!.start,
@@ -450,7 +488,22 @@ export function segmentsToCaptions(
   options?: CaptionLayoutOptions,
 ): Caption[] {
   const words = cleanWords(segmentsToWords(cleanSegments(segments, speech)), speech);
-  return wordsToCaptions(words, totalDuration, options);
+  const captions = wordsToCaptions(words, totalDuration, options);
+  if (!speech) return captions;
+  // A legenda sai da tela logo depois que a fala acaba, mesmo que o tempo da
+  // última palavra tenha escorregado para a música ou o silêncio seguinte.
+  for (const c of captions) {
+    const last = c.words?.[c.words.length - 1];
+    if (!last) continue;
+    const range = speech.find((r) => last.start < r.end + 250_000 && last.start >= r.start - 250_000);
+    if (range) c.end = Math.max(Math.min(c.end, range.end + 400_000), last.start + 300_000, c.start + 300_000);
+  }
+  // Nunca duas legendas na tela ao mesmo tempo.
+  for (let i = 0; i + 1 < captions.length; i++) {
+    const c = captions[i]!;
+    c.end = Math.min(c.end, captions[i + 1]!.start);
+  }
+  return captions.filter((c) => c.end > c.start);
 }
 
 /** Do VAD (centésimos de segundo) para trechos em microssegundos, ordenados e unidos. */
@@ -468,33 +521,86 @@ export function vadToSpeech(segments: { t0: number; t1: number }[]): SpeechRange
   return merged;
 }
 
+/** Um trecho de fala dentro do áudio emendado. */
+export interface SpeechChunk {
+  /** Início no áudio emendado. */
+  packed: Micros;
+  /** Início no áudio original (timeline). */
+  original: Micros;
+  length: Micros;
+}
+
 /**
- * Silencia o áudio fora da fala (com uma margem), para o modelo não "ler"
- * música e ruído como palavras. Muda o array recebido.
+ * Emenda só os trechos com fala (com uma margem), separados por um silêncio
+ * curto. O modelo erra muito o tempo das palavras quando o áudio tem silêncios
+ * ou música longos; sem eles, cada palavra cai perto do lugar certo e depois
+ * volta para o tempo original com `unpackTime`.
  */
-export function gateToSpeech(audio: Float32Array, speech: SpeechRange[], pad: Micros = 300_000): void {
+export function packSpeech(
+  audio: Float32Array,
+  speech: SpeechRange[],
+  pad: Micros = 200_000,
+  gap: Micros = 300_000,
+): { audio: Float32Array; chunks: SpeechChunk[] } {
   const rate = CAPTION_SAMPLE_RATE;
   const toSample = (t: Micros) => Math.max(0, Math.min(audio.length, Math.round((t / 1_000_000) * rate)));
-  const fade = Math.round(0.05 * rate);
-  let cursor = 0;
+  const ranges: { a: number; b: number }[] = [];
   for (const r of speech) {
     const a = toSample(r.start - pad);
     const b = toSample(r.end + pad);
-    silence(audio, cursor, a, fade);
-    cursor = Math.max(cursor, b);
+    const last = ranges[ranges.length - 1];
+    if (last && a <= last.b) last.b = Math.max(last.b, b);
+    else if (b > a) ranges.push({ a, b });
   }
-  silence(audio, cursor, audio.length, fade);
+  const gapSamples = Math.round((gap / 1_000_000) * rate);
+  const total = ranges.reduce((n, r) => n + (r.b - r.a), 0) + gapSamples * ranges.length;
+  const out = new Float32Array(total);
+  const chunks: SpeechChunk[] = [];
+  let cursor = 0;
+  const fade = Math.round(0.02 * rate);
+  for (const r of ranges) {
+    const piece = audio.subarray(r.a, r.b);
+    out.set(piece, cursor);
+    // Rampas curtas nas emendas, para não criar estalos.
+    for (let i = 0; i < Math.min(fade, piece.length); i++) {
+      out[cursor + i]! *= i / fade;
+      out[cursor + piece.length - 1 - i]! *= i / fade;
+    }
+    chunks.push({
+      packed: Math.round((cursor / rate) * 1_000_000),
+      original: Math.round((r.a / rate) * 1_000_000),
+      length: Math.round(((r.b - r.a) / rate) * 1_000_000),
+    });
+    cursor += piece.length + gapSamples;
+  }
+  return { audio: out, chunks };
 }
 
-function silence(audio: Float32Array, from: number, to: number, fade: number): void {
-  if (to <= from) return;
-  for (let i = from; i < to; i++) {
-    // Rampa curta nas bordas que encostam na fala, para não criar estalos que viram "palavras".
-    const left = from > 0 ? i - from : Infinity;
-    const right = to < audio.length ? to - 1 - i : Infinity;
-    const edge = Math.min(left, right);
-    audio[i] = edge < fade ? audio[i]! * (1 - edge / fade) : 0;
-  }
+/**
+ * Do tempo no áudio emendado para o tempo original. Um tempo no silêncio entre
+ * dois trechos vai para a borda mais próxima (fim de um ou começo do outro).
+ */
+export function unpackTime(t: Micros, chunks: SpeechChunk[]): Micros {
+  if (chunks.length === 0) return t;
+  let i = 0;
+  while (i + 1 < chunks.length && chunks[i + 1]!.packed <= t) i++;
+  const chunk = chunks[i]!;
+  const end = chunk.packed + chunk.length;
+  const next = chunks[i + 1];
+  if (t > end && next && t - end >= (next.packed - end) / 2) return next.original;
+  return chunk.original + Math.min(Math.max(0, t - chunk.packed), chunk.length);
+}
+
+/** Leva segmentos e tokens do áudio emendado de volta para a timeline. */
+export function unpackSegments(segments: WhisperSegment[], chunks: SpeechChunk[]): WhisperSegment[] {
+  if (chunks.length === 0) return segments;
+  const map = (cs: number) => unpackTime(cs * CS, chunks) / CS;
+  return segments.map((seg) => ({
+    ...seg,
+    t0: map(seg.t0),
+    t1: map(seg.t1),
+    tokens: seg.tokens?.map((t) => ({ ...t, t0: map(t.t0), t1: map(t.t1) })),
+  }));
 }
 
 /**
