@@ -20,6 +20,8 @@ import { useEditor } from '@/state/editor';
 import { BusyBanner } from '@/ui/Feedback';
 import { colors } from '@/ui/theme';
 
+import { gatedRotation, snapRotation, snapScale, type RotationGate } from './gestureMath';
+
 interface Box {
   cx: number;
   cy: number;
@@ -90,12 +92,36 @@ export interface PreviewProps {
 const SNAP = 0.015;
 
 /** Estado do gesto de transformação em andamento (só um por vez). */
-const live = { dx: 0, dy: 0, scale: 1, rotation: 0, snapped: false, centerX: false, centerY: false, active: 0, time: 0 };
+const live = {
+  dx: 0,
+  dy: 0,
+  scale: 1,
+  rotation: 0,
+  snapped: false,
+  centerX: false,
+  centerY: false,
+  /** Ímã do giro ou do tamanho encaixado (para vibrar só ao encaixar). */
+  shapeSnapped: false,
+  gate: { engaged: false, offset: 0 } as RotationGate,
+  active: 0,
+  time: 0,
+};
 
 /** Começa um gesto no instante `time` da agulha (onde um keyframe é gravado, se o item tiver). */
 function liveBegin(time: Micros) {
   if (live.active === 0) {
-    Object.assign(live, { dx: 0, dy: 0, scale: 1, rotation: 0, snapped: false, centerX: false, centerY: false, time });
+    Object.assign(live, {
+      dx: 0,
+      dy: 0,
+      scale: 1,
+      rotation: 0,
+      snapped: false,
+      centerX: false,
+      centerY: false,
+      shapeSnapped: false,
+      gate: { engaged: false, offset: 0 },
+      time,
+    });
   }
   live.active += 1;
 }
@@ -158,12 +184,21 @@ export function Preview({ project, plan, resources, player, onSize, size }: Prev
     applyGesture(`transform:${id}`, (base) => {
       const t0 = itemStateAt(base, id, live.time)?.transform;
       if (!t0) return base;
+      // Giro só depois da zona morta (a pinça sozinha não gira); ímãs em 0/90/180/270°
+      // e em 100% de tamanho, só quando essa parte está mudando.
+      const turning = live.gate.engaged || Math.abs(live.rotation) >= 4;
+      const rotation = snapRotation(t0.rotation + gatedRotation(live.rotation, live.gate));
+      const sizing = Math.abs(live.scale - 1) > 0.001;
+      const scaled = snapScale(Math.min(8, Math.max(0.05, t0.scale * live.scale)));
       const next: Transform = {
         x: t0.x + live.dx,
         y: t0.y + live.dy,
-        scale: Math.min(8, Math.max(0.05, t0.scale * live.scale)),
-        rotation: t0.rotation + live.rotation,
+        scale: sizing ? scaled.value : t0.scale,
+        rotation: turning ? rotation.value : t0.rotation,
       };
+      const shapeSnapped = (turning && rotation.snapped && rotation.value !== t0.rotation) || (sizing && scaled.snapped);
+      if (shapeSnapped && !live.shapeSnapped) Haptics.selectionAsync().catch(() => {});
+      live.shapeSnapped = shapeSnapped;
       // Ímã no centro, com uma vibração leve ao encaixar.
       if (Math.abs(next.x) < SNAP) next.x = 0;
       if (Math.abs(next.y) < SNAP) next.y = 0;

@@ -1,7 +1,7 @@
 import { useFonts } from '@shopify/react-native-skia';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertTriangle, X } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, BackHandler, Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -200,6 +200,10 @@ function EditorBody({ project }: { project: Project }) {
   }, [openPanel, select, exit]);
 
   const bottomHeight = Math.max(250, Math.round(screenH * 0.42));
+  // A timeline e a barra de ferramentas pesam para redesenhar: durante um gesto
+  // (arrastar no preview, barra deslizante) elas atualizam com prioridade menor
+  // e o preview acompanha o dedo sem engasgar.
+  const deferredProject = useDeferredValue(project);
 
   return (
     <EditorContext.Provider value={runtime}>
@@ -246,8 +250,8 @@ function EditorBody({ project }: { project: Project }) {
             <PanelSwitch project={project} />
           ) : (
             <>
-              <Timeline project={project} player={player} onAddMedia={addMedia} onOpenTransition={(clipId) => openPanel('transition', clipId)} />
-              <Toolbar project={project} onAddMedia={addMedia} />
+              <Timeline project={deferredProject} player={player} onAddMedia={addMedia} onOpenTransition={(clipId) => openPanel('transition', clipId)} />
+              <Toolbar project={deferredProject} onAddMedia={addMedia} />
             </>
           )}
         </View>

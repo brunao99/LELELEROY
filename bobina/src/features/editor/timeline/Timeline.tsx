@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { throttle } from '@/core/throttle';
 import { MIN_CLIP, formatSeconds, formatSpeed } from '@/core/time';
 import {
   clipDuration,
@@ -66,6 +67,7 @@ export function Timeline({ project, player, onAddMedia, onOpenTransition }: Time
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const userScroll = useSharedValue(false);
+  const lastScrollX = useSharedValue(-1);
   const total = projectDuration(project);
   const contentW = pad * 2 + toPx(total, pps);
 
@@ -78,8 +80,16 @@ export function Timeline({ project, player, onAddMedia, onOpenTransition }: Time
     },
   );
 
-  const seekFromScroll = useCallback((seconds: number) => player.seek(seconds), [player]);
-  const settle = useCallback(() => setPlayhead(Math.round(player.time.get() * 1_000_000)), [player, setPlayhead]);
+  // Arrastando a timeline: buscas agrupadas (no máximo uma a cada 70 ms, e a
+  // última sempre). Buscas seguidas demais se atropelam no decodificador e o
+  // quadro só aparece quando o dedo para.
+  const scrub = useMemo(() => throttle((seconds: number) => player.seek(seconds), 70), [player]);
+  useEffect(() => () => scrub.cancel(), [scrub]);
+  const seekFromScroll = useCallback((seconds: number) => scrub(seconds), [scrub]);
+  const settle = useCallback(() => {
+    scrub.flush();
+    setPlayhead(Math.round(player.time.get() * 1_000_000));
+  }, [player, scrub, setPlayhead]);
 
   const onScroll = useAnimatedScrollHandler({
     onBeginDrag: () => {
@@ -88,6 +98,9 @@ export function Timeline({ project, player, onAddMedia, onOpenTransition }: Time
     },
     onScroll: (e) => {
       if (!userScroll.get()) return;
+      // Menos de meio pixel não muda o quadro: nem passa para o JS.
+      if (Math.abs(e.contentOffset.x - lastScrollX.get()) < 0.5) return;
+      lastScrollX.set(e.contentOffset.x);
       scheduleOnRN(seekFromScroll, e.contentOffset.x / ppsSV.get());
     },
     onEndDrag: (e) => {
