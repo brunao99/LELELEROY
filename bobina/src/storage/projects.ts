@@ -38,7 +38,7 @@ function summaryOf(project: Project, cover: string | null): ProjectSummary {
 }
 
 /** Grava texto de forma atômica: arquivo temporário e depois troca. */
-function writeAtomic(dir: Directory, name: string, content: string) {
+export function writeAtomic(dir: Directory, name: string, content: string) {
   const tmp = new File(dir, `${name}.tmp`);
   if (tmp.exists) tmp.delete();
   tmp.create();

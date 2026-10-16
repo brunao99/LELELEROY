@@ -355,6 +355,82 @@ export function coverage(logits: Float32Array): number {
   return n / logits.length;
 }
 
+// ------------------------------------------------------------------ figurinha
+
+/** Caixa (0..1) das células com probabilidade ≥ 50%, ou null se vazia. */
+export function maskBounds(bytes: Uint8Array, size = MASK_SIZE): { x0: number; y0: number; x1: number; y1: number } | null {
+  let x0 = size;
+  let y0 = size;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (bytes[y * size + x]! < 128) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  if (x1 < 0) return null;
+  return { x0: x0 / size, y0: y0 / size, x1: (x1 + 1) / size, y1: (y1 + 1) / size };
+}
+
+/** Retângulo em pixels da foto (fim exclusivo). */
+export interface PixelBox {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+export interface StickerGeometry {
+  /** O que vira a figurinha: o objeto com 2 células de folga. */
+  crop: PixelBox;
+  /** A região reduzida que o refinamento lê: o recorte com mais 3 células de guarda. */
+  region: PixelBox;
+  /** Redução da foto (≤ 1) para a figurinha caber em `maxSide`. */
+  k: number;
+  outW: number;
+  outH: number;
+  regionW: number;
+  regionH: number;
+}
+
+/**
+ * Onde cortar a figurinha numa foto `W`×`H` a partir da máscara (256×256).
+ * O refinamento da borda olha 2 células em volta de cada pixel: por isso a
+ * região lida tem uma guarda maior que a folga do recorte.
+ */
+export function stickerGeometry(bytes: Uint8Array, W: number, H: number, maxSide: number, size = MASK_SIZE): StickerGeometry | null {
+  const box = maskBounds(bytes, size);
+  if (!box) return null;
+  const pad = 2 / size;
+  const guard = 5 / size;
+  const crop: PixelBox = {
+    x0: Math.max(0, Math.floor((box.x0 - pad) * W)),
+    y0: Math.max(0, Math.floor((box.y0 - pad) * H)),
+    x1: Math.min(W, Math.ceil((box.x1 + pad) * W)),
+    y1: Math.min(H, Math.ceil((box.y1 + pad) * H)),
+  };
+  const region: PixelBox = {
+    x0: Math.max(0, Math.floor((box.x0 - guard) * W)),
+    y0: Math.max(0, Math.floor((box.y0 - guard) * H)),
+    x1: Math.min(W, Math.ceil((box.x1 + guard) * W)),
+    y1: Math.min(H, Math.ceil((box.y1 + guard) * H)),
+  };
+  const k = Math.min(1, maxSide / Math.max(crop.x1 - crop.x0, crop.y1 - crop.y0));
+  return {
+    crop,
+    region,
+    k,
+    outW: Math.max(2, Math.round((crop.x1 - crop.x0) * k)),
+    outH: Math.max(2, Math.round((crop.y1 - crop.y0) * k)),
+    regionW: Math.max(1, Math.round((region.x1 - region.x0) * k)),
+    regionH: Math.max(1, Math.round((region.y1 - region.y0) * k)),
+  };
+}
+
 // ------------------------------------------------------------------ guardar
 
 /**

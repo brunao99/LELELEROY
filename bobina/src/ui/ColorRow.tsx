@@ -9,9 +9,11 @@ export interface ColorRowProps {
   /** Mostra a opção "sem cor" no começo. */
   allowNone?: boolean;
   onNone?: () => void;
+  /** Cores da linha (padrão: a paleta do app). */
+  swatches?: readonly string[];
 }
 
-export function ColorRow({ label, value, onChange, allowNone, onNone }: ColorRowProps) {
+export function ColorRow({ label, value, onChange, allowNone, onNone, swatches = SWATCHES }: ColorRowProps) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row} accessibilityLabel={label}>
       {allowNone ? (
@@ -25,7 +27,7 @@ export function ColorRow({ label, value, onChange, allowNone, onNone }: ColorRow
           <View style={styles.slash} />
         </Pressable>
       ) : null}
-      {SWATCHES.map((c) => (
+      {swatches.map((c) => (
         <Pressable
           key={c}
           accessibilityRole="radio"

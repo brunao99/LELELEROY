@@ -1,30 +1,35 @@
 /**
- * Estado do recorte com laço enquanto ele está aberto: a sessão (o quadro já
- * passou pela rede), o laço, os toques, a máscara do resultado e o rastreio.
- * O palco (sobre o preview) e o painel de baixo leem e mexem daqui.
+ * Estado do recorte com laço enquanto ele está aberto: a sessão (o quadro ou a
+ * foto já passou pela rede), o laço, os toques, a máscara do resultado e o
+ * rastreio. O palco (sobre o preview ou a colagem) e o painel de baixo leem e
+ * mexem daqui. No vídeo o resultado vira o recorte do clipe; na colagem, uma
+ * figurinha.
  */
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { create } from 'zustand';
 
+import type { CollageSticker } from '@/core/collage';
 import type { Click, Point } from '@/core/cutout';
 import type { Cutout, Micros } from '@/core/types';
 import {
   CUTOUT_FPS,
   CutoutSession,
+  PhotoCutoutSession,
   releaseCutoutSessions,
+  type LassoSession,
   saveCutoutMasks,
   type CutoutTarget,
   type TrackProgress,
 } from '@/engine/cutout';
 
 export type CutoutTool = 'lasso' | 'include' | 'exclude';
-export type CutoutPhase = 'opening' | 'drawing' | 'thinking' | 'result' | 'tracking';
+export type CutoutPhase = 'opening' | 'drawing' | 'thinking' | 'result' | 'tracking' | 'saving';
 
 interface CutoutEditorState {
-  /** Clipe em edição; null = laço fechado. */
+  /** Clipe (ou foto da colagem) em edição; null = laço fechado. */
   clipId: string | null;
   phase: CutoutPhase;
-  session: CutoutSession | null;
+  session: LassoSession | null;
   tool: CutoutTool;
   lasso: Point[];
   clicks: Click[];
@@ -34,12 +39,16 @@ interface CutoutEditorState {
   progress: TrackProgress | null;
   error: string | null;
   start: (clipId: string, target: CutoutTarget, time: Micros) => Promise<void>;
+  /** Laço numa foto (`key` identifica o que está aberto; `uri` é a foto inteira). */
+  startPhoto: (key: string, uri: string) => Promise<void>;
   setTool: (tool: CutoutTool) => void;
   finishLasso: (lasso: Point[]) => Promise<void>;
   addClick: (click: Click) => Promise<void>;
   undo: () => void;
   /** Rastreia o clipe inteiro e grava as máscaras; devolve o recorte para o projeto. */
   apply: () => Promise<Cutout | null>;
+  /** Grava a figurinha na colagem e fecha o laço; null se não deu. */
+  makeSticker: (collageId: string) => Promise<CollageSticker | null>;
   cancelTracking: () => void;
   close: () => void;
 }
@@ -64,22 +73,32 @@ function message(e: unknown): string {
   return text.replace(/^Error:\s*/, '');
 }
 
+/** Abre uma sessão (quadro ou foto) se ninguém trocou o que está aberto no meio do caminho. */
+async function openWith(key: string, open: () => Promise<LassoSession>, failure: string) {
+  const { getState, setState } = useCutoutEditor;
+  getState().session?.dispose();
+  setState({ ...IDLE, clipId: key, phase: 'opening' });
+  try {
+    const session = await open();
+    if (getState().clipId !== key) {
+      session.dispose();
+      return;
+    }
+    setState({ session, phase: 'drawing' });
+  } catch (e) {
+    if (getState().clipId === key) setState({ error: `${failure}: ${message(e)}`, phase: 'drawing' });
+  }
+}
+
 export const useCutoutEditor = create<CutoutEditorState>((set, get) => ({
   ...IDLE,
 
   async start(clipId, target, time) {
-    get().session?.dispose();
-    set({ ...IDLE, clipId, phase: 'opening' });
-    try {
-      const session = await CutoutSession.open(target, time, CUTOUT_FPS);
-      if (get().clipId !== clipId) {
-        session.dispose();
-        return;
-      }
-      set({ session, phase: 'drawing' });
-    } catch (e) {
-      if (get().clipId === clipId) set({ error: `Não foi possível abrir o quadro: ${message(e)}`, phase: 'drawing' });
-    }
+    await openWith(clipId, () => CutoutSession.open(target, time, CUTOUT_FPS), 'Não foi possível abrir o quadro');
+  },
+
+  async startPhoto(key, uri) {
+    await openWith(key, () => PhotoCutoutSession.open(uri), 'Não foi possível abrir a foto');
   },
 
   setTool(tool) {
@@ -131,7 +150,7 @@ export const useCutoutEditor = create<CutoutEditorState>((set, get) => ({
 
   async apply() {
     const { session, lasso, clicks } = get();
-    if (!session || !get().mask) return null;
+    if (!(session instanceof CutoutSession) || !get().mask) return null;
     const controller = new AbortController();
     tracking = controller;
     set({ phase: 'tracking', progress: { done: 0, total: session.times.length, msPerFrame: 0 }, error: null });
@@ -158,6 +177,20 @@ export const useCutoutEditor = create<CutoutEditorState>((set, get) => ({
     } finally {
       tracking = null;
       deactivateKeepAwake('cutout').catch(() => {});
+    }
+  },
+
+  async makeSticker(collageId) {
+    const { session } = get();
+    if (!(session instanceof PhotoCutoutSession) || !get().mask) return null;
+    set({ phase: 'saving', error: null });
+    try {
+      const sticker = await session.makeSticker(collageId);
+      get().close();
+      return sticker;
+    } catch (e) {
+      if (get().session === session) set({ phase: 'result', error: `Não foi possível criar a figurinha: ${message(e)}` });
+      return null;
     }
   },
 

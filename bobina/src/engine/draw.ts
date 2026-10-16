@@ -242,7 +242,7 @@ interface WordHighlight {
 }
 
 /** Desenha um texto (ou legenda) centrado na posição do transform. */
-function drawText(
+export function drawText(
   canvas: SkCanvas,
   parts: TextParts,
   style: TextStyle,

@@ -7,7 +7,17 @@
  * mesmo decodificador do motor, já esticados para 1024x1024.
  */
 import { __RNSkiaVideoPrivateAPI as SkiaVideo } from '@azzapp/react-native-skia-video';
-import { AlphaType, ColorType, FilterMode, MipmapMode, Skia, type SkImage, type SkSurface } from '@shopify/react-native-skia';
+import {
+  AlphaType,
+  ColorType,
+  FilterMode,
+  ImageFormat,
+  MipmapMode,
+  Skia,
+  TileMode,
+  type SkImage,
+  type SkSurface,
+} from '@shopify/react-native-skia';
 import { Directory, File } from 'expo-file-system';
 import type { InferenceSession } from 'onnxruntime-react-native';
 import { Platform } from 'react-native';
@@ -23,17 +33,22 @@ import {
   logitsToBytes,
   packMaskFile,
   nearestFrame,
+  stickerGeometry,
   trackTimes,
   type Click,
   type Point,
 } from '@/core/cutout';
+import type { CollageSticker } from '@/core/collage';
 import { displaySize } from '@/core/geometry';
 import { newId } from '@/core/ids';
 import type { MediaAsset, Micros } from '@/core/types';
+import { collageDir, collageFile } from '@/storage/collages';
 import { absolutePath, ensureDir, modelsDir, projectDir, toPlainPath } from '@/storage/paths';
 
 import { drawUpright } from './bake';
 import { EdgeTam, type EdgeTamSessions, type Features, type Segmentation } from './edgetam';
+import { loadImage } from './resources';
+import { fxEffect } from './shaders';
 
 // ------------------------------------------------------------------ modelo
 
@@ -375,43 +390,18 @@ export interface TrackProgress {
 }
 
 /**
- * Uma sessão de recorte: o quadro do laço já passou pela rede e fica guardado,
- * então cada laço ou toque novo leva só o decodificador (rápido). `track` roda o
- * clipe inteiro: do quadro do laço até o fim e de volta até o começo.
+ * O laço sobre uma imagem parada: a imagem já passou pela rede e fica guardada,
+ * então cada laço ou toque novo leva só o decodificador (rápido).
  */
-export class CutoutSession {
-  private history: { seg: Segmentation; raw: Float32Array; final: Float32Array }[] = [];
-  private disposed = false;
+export abstract class LassoSession {
+  protected history: { seg: Segmentation; raw: Float32Array; final: Float32Array }[] = [];
+  protected disposed = false;
 
-  private constructor(
-    readonly target: CutoutTarget,
-    readonly times: Micros[],
-    readonly promptIndex: number,
+  protected constructor(
     readonly image: SkImage,
-    private readonly tracker: EdgeTam,
-    private readonly feats: Features,
-    private readonly path: string,
+    protected readonly tracker: EdgeTam,
+    protected readonly feats: Features,
   ) {}
-
-  /** Instante da mídia do quadro do laço (no passo do rastreio). */
-  get time(): Micros {
-    return this.times[this.promptIndex]!;
-  }
-
-  static async open(target: CutoutTarget, time: Micros, fps = CUTOUT_FPS): Promise<CutoutSession> {
-    const s = await cutoutSessions();
-    const times = trackTimes(target.from, target.to, fps);
-    const p = nearestFrame(times, time);
-    const path = absolutePath(target.projectId, target.asset.file);
-    const at = times[p]! / 1_000_000;
-    await openReader(path, Math.max(0, at - 0.05), 0.5);
-    const read = await readFrame(at, displayFor(target.asset));
-    const image = read.display ? imageFromPixels(read.display) : null;
-    if (!image) throw new Error('Não foi possível mostrar o quadro.');
-    const tracker = new EdgeTam(s, ort().Tensor);
-    const feats = await tracker.encode(read.rgba);
-    return new CutoutSession(target, times, p, image, tracker, feats, path);
-  }
 
   /** Máscara para o laço e os toques. Toques refinam a tentativa anterior (como o SAM faz). */
   async predict(lasso: Point[], clicks: Click[]): Promise<CutoutPreview> {
@@ -433,6 +423,50 @@ export class CutoutSession {
 
   get hasResult(): boolean {
     return this.history.length > 0;
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.image.dispose();
+  }
+}
+
+/**
+ * Recorte de um clipe de vídeo: o laço num quadro e `track` para o clipe
+ * inteiro (do quadro do laço até o fim e de volta até o começo).
+ */
+export class CutoutSession extends LassoSession {
+  private constructor(
+    readonly target: CutoutTarget,
+    readonly times: Micros[],
+    readonly promptIndex: number,
+    image: SkImage,
+    tracker: EdgeTam,
+    feats: Features,
+    private readonly path: string,
+  ) {
+    super(image, tracker, feats);
+  }
+
+  /** Instante da mídia do quadro do laço (no passo do rastreio). */
+  get time(): Micros {
+    return this.times[this.promptIndex]!;
+  }
+
+  static async open(target: CutoutTarget, time: Micros, fps = CUTOUT_FPS): Promise<CutoutSession> {
+    const s = await cutoutSessions();
+    const times = trackTimes(target.from, target.to, fps);
+    const p = nearestFrame(times, time);
+    const path = absolutePath(target.projectId, target.asset.file);
+    const at = times[p]! / 1_000_000;
+    await openReader(path, Math.max(0, at - 0.05), 0.5);
+    const read = await readFrame(at, displayFor(target.asset));
+    const image = read.display ? imageFromPixels(read.display) : null;
+    if (!image) throw new Error('Não foi possível mostrar o quadro.');
+    const tracker = new EdgeTam(s, ort().Tensor);
+    const feats = await tracker.encode(read.rgba);
+    return new CutoutSession(target, times, p, image, tracker, feats, path);
   }
 
   /**
@@ -486,11 +520,137 @@ export class CutoutSession {
     return masks;
   }
 
-  dispose(): void {
+  override dispose(): void {
     if (this.disposed) return;
-    this.disposed = true;
-    this.image.dispose();
+    super.dispose();
     closeReader().catch(() => {});
+  }
+}
+
+/** Lado maior da figurinha gerada. */
+const STICKER_MAX_SIDE = 1600;
+
+/** Desenha `image` esticada em `w`×`h` e devolve os pixels RGBA (sem pré-multiplicar). */
+function pixelsOf(image: SkImage, w: number, h: number): Uint8Array {
+  const surface = Skia.Surface.MakeOffscreen(w, h);
+  if (!surface) throw new Error('Não foi possível criar a superfície.');
+  surface
+    .getCanvas()
+    .drawImageRectOptions(image, Skia.XYWHRect(0, 0, image.width(), image.height()), Skia.XYWHRect(0, 0, w, h), FilterMode.Linear, MipmapMode.Linear, null);
+  surface.flush();
+  const snap = surface.makeImageSnapshot();
+  const pixels = snap.readPixels(0, 0, { width: w, height: h, colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul }) as Uint8Array | null;
+  snap.dispose();
+  surface.dispose();
+  if (!pixels) throw new Error('Não foi possível ler os pixels da foto.');
+  return pixels;
+}
+
+/**
+ * Laço numa foto (colagem): o recorte vira uma figurinha, um PNG transparente
+ * cortado em volta do objeto, na resolução da foto original.
+ */
+export class PhotoCutoutSession extends LassoSession {
+  private constructor(
+    private readonly uri: string,
+    private readonly width: number,
+    private readonly height: number,
+    image: SkImage,
+    tracker: EdgeTam,
+    feats: Features,
+  ) {
+    super(image, tracker, feats);
+  }
+
+  /** `uri` da foto inteira (com a orientação já aplicada). */
+  static async open(uri: string): Promise<PhotoCutoutSession> {
+    const s = await cutoutSessions();
+    const full = await loadImage(uri);
+    if (!full) throw new Error('Não foi possível abrir a foto.');
+    try {
+      const w = full.width();
+      const h = full.height();
+      const rgba = pixelsOf(full, MODEL_SIZE, MODEL_SIZE);
+      const k = Math.min(1, DISPLAY_MAX_SIDE / Math.max(w, h));
+      const dw = Math.max(2, Math.round(w * k));
+      const dh = Math.max(2, Math.round(h * k));
+      const image = imageFromPixels({ pixels: pixelsOf(full, dw, dh), width: dw, height: dh });
+      if (!image) throw new Error('Não foi possível mostrar a foto.');
+      const tracker = new EdgeTam(s, ort().Tensor);
+      const feats = await tracker.encode(rgba);
+      return new PhotoCutoutSession(uri, w, h, image, tracker, feats);
+    } finally {
+      full.dispose();
+    }
+  }
+
+  /**
+   * Gera a figurinha: a borda passa pelo mesmo refinamento guiado pela imagem
+   * do vídeo (JBU), agora na resolução da foto. Grava em `stickers/`.
+   */
+  async makeSticker(collageId: string): Promise<CollageSticker> {
+    const last = this.history[this.history.length - 1];
+    if (!last) throw new Error('Desenhe o laço primeiro.');
+    const bytes = logitsToBytes(last.final);
+    const geo = stickerGeometry(bytes, this.width, this.height, STICKER_MAX_SIDE);
+    if (!geo) throw new Error('O recorte ficou vazio.');
+    const { crop, region: r, k, outW, outH, regionW, regionH } = geo;
+
+    const full = await loadImage(this.uri);
+    if (!full) throw new Error('Não foi possível abrir a foto.');
+    const mask = Skia.Image.MakeImage(
+      { width: MASK_SIZE, height: MASK_SIZE, colorType: ColorType.Gray_8, alphaType: AlphaType.Opaque },
+      Skia.Data.fromBytes(bytes),
+      MASK_SIZE,
+    );
+    const fx = fxEffect();
+    const region = Skia.Surface.MakeOffscreen(regionW, regionH);
+    const out = Skia.Surface.MakeOffscreen(outW, outH);
+    try {
+      if (!mask || !fx || !region || !out) throw new Error('Não foi possível preparar a figurinha.');
+      // 1. A região da foto já reduzida (com mipmaps: sem serrilhado).
+      region
+        .getCanvas()
+        .drawImageRectOptions(
+          full,
+          Skia.XYWHRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0),
+          Skia.XYWHRect(0, 0, regionW, regionH),
+          FilterMode.Linear,
+          MipmapMode.Linear,
+          null,
+        );
+      region.flush();
+      const reduced = region.makeImageSnapshot();
+      // 2. O shader do recorte nas coordenadas da foto inteira reduzida.
+      const local = Skia.Matrix();
+      local.translate(r.x0 * k, r.y0 * k);
+      const imageShader = reduced.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Linear, MipmapMode.None, local);
+      const maskShader = mask.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Nearest, MipmapMode.None);
+      const paint = Skia.Paint();
+      paint.setShader(fx.makeShaderWithChildren([this.width * k, this.height * k, 0, 0, 0, 0, 0, 0, 0, 0, 1, MASK_SIZE, 0, 0, 0], [imageShader, maskShader]));
+      const canvas = out.getCanvas();
+      canvas.clear(Skia.Color('transparent'));
+      canvas.translate(-crop.x0 * k, -crop.y0 * k);
+      canvas.drawRect(Skia.XYWHRect(crop.x0 * k, crop.y0 * k, outW, outH), paint);
+      out.flush();
+      const snap = out.makeImageSnapshot();
+      const png = snap.encodeToBytes(ImageFormat.PNG, 100);
+      snap.dispose();
+      reduced.dispose();
+      if (!png || png.length === 0) throw new Error('Não foi possível gravar a figurinha.');
+      ensureDir(new Directory(collageDir(collageId), 'stickers'));
+      const id = newId('s');
+      const file = `stickers/${id}.png`;
+      const target = collageFile(collageId, file);
+      target.create({ overwrite: true });
+      target.write(png);
+      return { id, file, width: outW, height: outH };
+    } finally {
+      full.dispose();
+      mask?.dispose();
+      region?.dispose();
+      out?.dispose();
+    }
   }
 }
 

@@ -5,13 +5,15 @@ import type { MediaAsset } from '@/core/types';
 import { importMedia, type PickedMedia } from '@/storage/media';
 
 /** Abre o seletor do sistema (fotos e vídeos, vários, na ordem tocada). Não pede permissão de galeria. */
-export async function pickVisualMedia(options: { multiple?: boolean; videosOnly?: boolean } = {}): Promise<PickedMedia[]> {
+export async function pickVisualMedia(
+  options: { multiple?: boolean; videosOnly?: boolean; imagesOnly?: boolean; limit?: number } = {},
+): Promise<PickedMedia[]> {
   const multiple = options.multiple ?? true;
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: options.videosOnly ? ['videos'] : ['images', 'videos'],
+    mediaTypes: options.videosOnly ? ['videos'] : options.imagesOnly ? ['images'] : ['images', 'videos'],
     allowsMultipleSelection: multiple,
     orderedSelection: multiple,
-    selectionLimit: multiple ? 0 : 1,
+    selectionLimit: multiple ? (options.limit ?? 0) : 1,
     quality: 1,
     preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
     shouldDownloadFromNetwork: true,

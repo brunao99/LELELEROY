@@ -207,7 +207,23 @@ function drawScene(canvas: SkCanvas, s: Scene, live: number[], drawing: boolean,
   }
 }
 
-export function CutoutStage() {
+const HINTS: Record<string, string> = {
+  thinking: 'Procurando o objeto…',
+  saving: 'Criando a figurinha…',
+  drawing: 'Contorne o objeto com o dedo',
+  include: 'Toque no que falta no recorte',
+  exclude: 'Toque no que deve sair do recorte',
+  result: 'Desenhe de novo para refazer, ou ajuste com Incluir e Excluir',
+};
+
+function hintFor(phase: string, tool: string, kind: 'clip' | 'photo'): string {
+  if (phase === 'opening') return kind === 'photo' ? 'Preparando a foto…' : 'Preparando o quadro…';
+  if (phase === 'result') return HINTS[tool] ?? HINTS.result!;
+  return HINTS[phase] ?? HINTS.result!;
+}
+
+/** `kind`: o que está embaixo do laço (um quadro do clipe ou uma foto da colagem). */
+export function CutoutStage({ kind = 'clip' }: { kind?: 'clip' | 'photo' }) {
   const session = useCutoutEditor((s) => s.session);
   const phase = useCutoutEditor((s) => s.phase);
   const tool = useCutoutEditor((s) => s.tool);
@@ -399,19 +415,7 @@ export function CutoutStage() {
     setArea({ width, height });
   };
 
-  const hint =
-    error ??
-    (phase === 'opening'
-      ? 'Preparando o quadro…'
-      : phase === 'thinking'
-        ? 'Procurando o objeto…'
-        : phase === 'drawing'
-          ? 'Contorne o objeto com o dedo'
-          : tool === 'include'
-            ? 'Toque no que falta no recorte'
-            : tool === 'exclude'
-              ? 'Toque no que deve sair do recorte'
-              : 'Desenhe de novo para refazer, ou ajuste com Incluir e Excluir');
+  const hint = error ?? hintFor(phase, tool, kind);
 
   return (
     <View style={styles.stage} onLayout={onLayout}>

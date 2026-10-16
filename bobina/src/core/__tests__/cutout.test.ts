@@ -1,4 +1,6 @@
 import {
+  maskBounds,
+  stickerGeometry,
   MASK_PIXELS,
   MASK_SIZE,
   MEMORY_DIM,
@@ -189,5 +191,25 @@ describe('guardar as máscaras', () => {
     const times = trackTimes(1_000_000, 2_000_000, 4);
     expect(times).toEqual([1_000_000, 1_250_000, 1_500_000, 1_750_000, 2_000_000]);
     expect(nearestFrame(times, 1_600_000)).toBe(2);
+  });
+});
+
+describe('figurinha', () => {
+  it('caixa da máscara, folga do recorte e guarda do refinamento', () => {
+    const bytes = new Uint8Array(MASK_PIXELS);
+    // Objeto nas células x 64..127, y 32..95.
+    for (let y = 32; y < 96; y++) for (let x = 64; x < 128; x++) bytes[y * MASK_SIZE + x] = 255;
+    expect(maskBounds(bytes)).toEqual({ x0: 0.25, y0: 0.125, x1: 0.5, y1: 0.375 });
+    const g = stickerGeometry(bytes, 2560, 2560, 1600)!;
+    // 2 células de folga (20 px), 5 de guarda (50 px), sem redução (640+40 < 1600).
+    expect(g.crop).toEqual({ x0: 620, y0: 300, x1: 1300, y1: 980 });
+    expect(g.region).toEqual({ x0: 590, y0: 270, x1: 1330, y1: 1010 });
+    expect(g.k).toBe(1);
+    expect([g.outW, g.outH]).toEqual([680, 680]);
+    // Foto grande: reduz para o lado maior caber.
+    const big = stickerGeometry(bytes, 10240, 10240, 1600)!;
+    expect(Math.max(big.outW, big.outH)).toBe(1600);
+    expect(big.regionW).toBeGreaterThan(big.outW);
+    expect(stickerGeometry(new Uint8Array(MASK_PIXELS), 100, 100, 1600)).toBeNull();
   });
 });

@@ -48,11 +48,9 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "O Ledit's precisa de acesso à galeria para salvar os vídeos exportados.",
-          "savePhotosPermission": "O Ledit's salva os vídeos exportados na sua galeria.",
-          "granularPermissions": [
-            "video"
-          ]
+          "photosPermission": "O Ledit's precisa de acesso à galeria para salvar os vídeos e as colagens exportados.",
+          "savePhotosPermission": "O Ledit's salva os vídeos e as colagens exportados na sua galeria.",
+          "granularPermissions": ["video", "photo"]
         }
       ],
       "expo-sharing",
