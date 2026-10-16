@@ -1,0 +1,88 @@
+# Gera o app de iPhone do Ledit's como .ipa SEM assinatura e guarda como
+# artefato da execução. A Apple não aceita instalar um .ipa sem assinatura:
+# ele precisa ser assinado na hora da instalação com o Apple ID de quem vai
+# usar (Sideloadly ou AltStore, num computador). Também dá para rodar à mão em
+# Actions > App iOS > Run workflow.
+name: App iOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'claude/**']
+    paths:
+      - 'bobina/**'
+      - '.github/workflows/ios-ipa.yml'
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ipa:
+    name: Gerar IPA
+    runs-on: macos-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: bobina
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Usar o Xcode mais novo da máquina
+        run: |
+          ls -d /Applications/Xcode*.app
+          latest=$(ls -d /Applications/Xcode*.app | grep -E 'Xcode_[0-9.]+\.app$' | sort -V | tail -1)
+          sudo xcode-select -s "$latest"
+          xcodebuild -version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: bobina/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar o projeto iOS
+        run: npx expo prebuild --platform ios
+        env:
+          CI: 1
+          EXPO_NO_TELEMETRY: 1
+
+      - name: Compilar (sem assinatura)
+        run: |
+          set -o pipefail
+          workspace=$(ls -d ios/*.xcworkspace | head -1)
+          scheme=$(basename "$workspace" .xcworkspace)
+          echo "workspace=$workspace scheme=$scheme"
+          xcodebuild archive \
+            -workspace "$workspace" \
+            -scheme "$scheme" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Ledits.xcarchive \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
+        env:
+          NODE_ENV: production
+
+      - name: Empacotar o IPA
+        run: |
+          version=$(node -p "require('./app.json').expo.version")
+          mkdir -p Payload
+          cp -R build/Ledits.xcarchive/Products/Applications/*.app Payload/
+          zip -qry "Ledits-${version}-${{ github.run_number }}.ipa" Payload
+          ls -lh Ledits-*.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ledits-iOS-${{ github.run_number }}
+          path: bobina/Ledits-*.ipa
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: error

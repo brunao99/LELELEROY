@@ -1,0 +1,82 @@
+{
+  "expo": {
+    "name": "Ledit's",
+    "slug": "bobina",
+    "scheme": "bobina",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0b0c0f",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.brunao99.bobina"
+    },
+    "android": {
+      "package": "com.brunao99.bobina",
+      "adaptiveIcon": {
+        "backgroundColor": "#0b0c0f",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O Ledit's abre a sua galeria para você escolher os vídeos e fotos do projeto.",
+          "cameraPermission": false,
+          "microphonePermission": "O Ledit's usa o microfone para gravar narrações."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "O Ledit's usa o microfone para gravar narrações.",
+          "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "O Ledit's precisa de acesso à galeria para salvar os vídeos e as colagens exportados.",
+          "savePhotosPermission": "O Ledit's salva os vídeos e as colagens exportados na sua galeria.",
+          "granularPermissions": ["video", "photo"]
+        }
+      ],
+      "expo-sharing",
+      "./plugins/withCrashLog",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120,
+          "resizeMode": "contain",
+          "backgroundColor": "#0b0c0f"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
+      "onnxruntime-react-native",
+      "./plugins/withOnnxRuntime"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

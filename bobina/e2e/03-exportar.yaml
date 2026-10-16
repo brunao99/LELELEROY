@@ -1,0 +1,21 @@
+# F01 (parte 2): exporta o primeiro projeto em 720p e confere a tela final.
+appId: com.brunao99.bobina
+---
+- launchApp
+- tapOn:
+    text: "Projeto .*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Exportar"
+    timeout: 30000
+- tapOn: "Exportar"
+- tapOn: "720p"
+- tapOn: "Exportar vídeo"
+- extendedWaitUntil:
+    visible: "Vídeo pronto"
+    timeout: 300000
+- tapOn:
+    text: "Permitir"
+    optional: true
+- assertVisible: "Compartilhar"
+- tapOn: "Voltar ao editor"

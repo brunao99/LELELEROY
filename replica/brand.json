@@ -1,0 +1,13 @@
+{
+  "name": "Ledit's",
+  "avoid": [
+    "CapCut",
+    "ByteDance",
+    "Jianying"
+  ],
+  "domains": [
+    "capcut.com",
+    "bytedance.com"
+  ],
+  "colors": []
+}

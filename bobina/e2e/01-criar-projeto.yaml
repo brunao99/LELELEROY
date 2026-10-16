@@ -1,0 +1,22 @@
+# F01 (parte 1): cria um projeto escolhendo 2 vídeos no seletor do sistema.
+# Antes: deixe pelo menos 2 vídeos curtos na galeria do aparelho.
+# O seletor de fotos é do sistema; os nomes abaixo são do Photo Picker do Android 13+.
+appId: com.brunao99.bobina
+---
+- launchApp
+- tapOn: "Novo projeto"
+- tapOn:
+    text: "Vídeos"
+    optional: true
+- tapOn:
+    id: "com.google.android.providers.media.module:id/icon_thumbnail"
+    index: 0
+- tapOn:
+    id: "com.google.android.providers.media.module:id/icon_thumbnail"
+    index: 1
+- tapOn:
+    text: "Adicionar.*"
+- extendedWaitUntil:
+    visible: "Exportar"
+    timeout: 60000
+- assertVisible: "Fechar o editor"

@@ -1,0 +1,163 @@
+diff --git a/node_modules/whisper.rn/cpp/jsi/RNWhisperJSI.cpp b/node_modules/whisper.rn/cpp/jsi/RNWhisperJSI.cpp
+index ac3403e..0f58fb0 100644
+--- a/node_modules/whisper.rn/cpp/jsi/RNWhisperJSI.cpp
++++ b/node_modules/whisper.rn/cpp/jsi/RNWhisperJSI.cpp
+@@ -277,10 +277,18 @@ private:
+     bool tracked_;
+ };
+ 
++struct TokenData {
++    std::string text;
++    int t0 = 0;
++    int t1 = 0;
++    float p = 0;
++};
++
+ struct SegmentData {
+     std::string text;
+     int t0 = 0;
+     int t1 = 0;
++    std::vector<TokenData> tokens;
+ };
+ 
+ struct TranscribeResultData {
+@@ -888,6 +896,16 @@ TranscribeConfig createTranscribeConfig(
+     config.params.max_len = getIntProperty(runtime, options, "maxLen", config.params.max_len);
+     config.params.n_max_text_ctx =
+         getIntProperty(runtime, options, "maxContext", config.params.n_max_text_ctx);
++    config.params.split_on_word =
++        getBoolProperty(runtime, options, "splitOnWord", config.params.split_on_word);
++    config.params.suppress_nst =
++        getBoolProperty(runtime, options, "suppressNst", config.params.suppress_nst);
++    config.params.no_speech_thold =
++        getFloatProperty(runtime, options, "noSpeechThold", config.params.no_speech_thold);
++    config.params.logprob_thold =
++        getFloatProperty(runtime, options, "logprobThold", config.params.logprob_thold);
++    config.params.entropy_thold =
++        getFloatProperty(runtime, options, "entropyThold", config.params.entropy_thold);
+     config.params.offset_ms =
+         getIntProperty(runtime, options, "offset", config.params.offset_ms);
+     config.params.duration_ms =
+@@ -1352,11 +1370,29 @@ std::vector<SegmentData> readSegments(
+         if (resultText) {
+             resultText->append(text);
+         }
+-        segments.push_back({
+-            text,
+-            static_cast<int>(whisper_full_get_segment_t0(context, index)),
+-            static_cast<int>(whisper_full_get_segment_t1(context, index)),
+-        });
++        SegmentData segment;
++        segment.text = text;
++        segment.t0 = static_cast<int>(whisper_full_get_segment_t0(context, index));
++        segment.t1 = static_cast<int>(whisper_full_get_segment_t1(context, index));
++        // Tokens de texto (sem os especiais) com tempo e probabilidade, para
++        // legendas palavra por palavra e para descartar trechos incertos.
++        const whisper_token eot = whisper_token_eot(context);
++        const int tokenCount = whisper_full_n_tokens(context, index);
++        segment.tokens.reserve(static_cast<size_t>(std::max(0, tokenCount)));
++        for (int tokenIndex = 0; tokenIndex < tokenCount; ++tokenIndex) {
++            whisper_token_data data = whisper_full_get_token_data(context, index, tokenIndex);
++            if (data.id >= eot) {
++                continue;
++            }
++            const char *tokenText = whisper_full_get_token_text(context, index, tokenIndex);
++            segment.tokens.push_back({
++                tokenText ? tokenText : "",
++                static_cast<int>(data.t0),
++                static_cast<int>(data.t1),
++                data.p,
++            });
++        }
++        segments.push_back(std::move(segment));
+     }
+ 
+     return segments;
+@@ -1415,6 +1451,22 @@ jsi::Array createSegmentsArray(
+             jsi::String::createFromUtf8(runtime, segment.text));
+         item.setProperty(runtime, "t0", jsi::Value(segment.t0));
+         item.setProperty(runtime, "t1", jsi::Value(segment.t1));
++        if (!segment.tokens.empty()) {
++            jsi::Array tokens(runtime, segment.tokens.size());
++            for (size_t tokenIndex = 0; tokenIndex < segment.tokens.size(); ++tokenIndex) {
++                const auto &token = segment.tokens[tokenIndex];
++                jsi::Object tokenItem(runtime);
++                tokenItem.setProperty(
++                    runtime,
++                    "text",
++                    jsi::String::createFromUtf8(runtime, token.text));
++                tokenItem.setProperty(runtime, "t0", jsi::Value(token.t0));
++                tokenItem.setProperty(runtime, "t1", jsi::Value(token.t1));
++                tokenItem.setProperty(runtime, "p", jsi::Value(static_cast<double>(token.p)));
++                tokens.setValueAtIndex(runtime, tokenIndex, tokenItem);
++            }
++            item.setProperty(runtime, "tokens", tokens);
++        }
+         array.setValueAtIndex(runtime, index, item);
+     }
+     return array;
+diff --git a/node_modules/whisper.rn/lib/typescript/NativeRNWhisper.d.ts b/node_modules/whisper.rn/lib/typescript/NativeRNWhisper.d.ts
+index 0d1a41b..c9edb31 100644
+--- a/node_modules/whisper.rn/lib/typescript/NativeRNWhisper.d.ts
++++ b/node_modules/whisper.rn/lib/typescript/NativeRNWhisper.d.ts
+@@ -32,6 +32,16 @@ export type TranscribeOptions = {
+     bestOf?: number;
+     /** Initial Prompt */
+     prompt?: string;
++    /** Split on word rather than on token when used with maxLen (patch do Ledit's) */
++    splitOnWord?: boolean;
++    /** Suppress non-speech tokens like [music] (patch do Ledit's) */
++    suppressNst?: boolean;
++    /** No-speech probability threshold (patch do Ledit's) */
++    noSpeechThold?: number;
++    /** Average log probability threshold for temperature fallback (patch do Ledit's) */
++    logprobThold?: number;
++    /** Entropy threshold for temperature fallback (patch do Ledit's) */
++    entropyThold?: number;
+ };
+ export type TranscribeResult = {
+     result: string;
+@@ -40,6 +50,13 @@ export type TranscribeResult = {
+         text: string;
+         t0: number;
+         t1: number;
++        /** Tokens de texto com tempo (centésimos de s) e probabilidade (patch do Ledit's) */
++        tokens?: Array<{
++            text: string;
++            t0: number;
++            t1: number;
++            p: number;
++        }>;
+     }>;
+     isAborted: boolean;
+ };
+diff --git a/node_modules/whisper.rn/src/NativeRNWhisper.ts b/node_modules/whisper.rn/src/NativeRNWhisper.ts
+index 61250ef..204db7e 100644
+--- a/node_modules/whisper.rn/src/NativeRNWhisper.ts
++++ b/node_modules/whisper.rn/src/NativeRNWhisper.ts
+@@ -35,6 +35,16 @@ export type TranscribeOptions = {
+   bestOf?: number
+   /** Initial Prompt */
+   prompt?: string
++  /** Split on word rather than on token when used with maxLen (patch do Ledit's) */
++  splitOnWord?: boolean
++  /** Suppress non-speech tokens like [music] (patch do Ledit's) */
++  suppressNst?: boolean
++  /** No-speech probability threshold (patch do Ledit's) */
++  noSpeechThold?: number
++  /** Average log probability threshold for temperature fallback (patch do Ledit's) */
++  logprobThold?: number
++  /** Entropy threshold for temperature fallback (patch do Ledit's) */
++  entropyThold?: number
+ }
+ 
+ export type TranscribeResult = {
+@@ -44,6 +54,8 @@ export type TranscribeResult = {
+     text: string
+     t0: number
+     t1: number
++    /** Tokens de texto com tempo (centésimos de s) e probabilidade (patch do Ledit's) */
++    tokens?: Array<{ text: string; t0: number; t1: number; p: number }>
+   }>
+   isAborted: boolean
+ }

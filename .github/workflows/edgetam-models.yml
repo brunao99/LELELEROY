@@ -1,0 +1,73 @@
+# Exporta o EdgeTAM (Meta, Apache-2.0) para os quatro grafos ONNX do recorte com
+# laço, confere cada um contra o PyTorch e publica como a Release "edgetam-1"
+# deste repositório. O app baixa os arquivos daqui na primeira vez que o recorte
+# é usado. Se a Release já existe, não mexe nela: para publicar uma versão nova,
+# troque o nome aqui e em bobina/src/engine/cutout.ts.
+name: Modelos de recorte
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'claude/**']
+    paths:
+      - 'bobina/tools/edgetam/**'
+      - '.github/workflows/edgetam-models.yml'
+
+concurrency:
+  group: edgetam-models
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: edgetam-1
+
+jobs:
+  export:
+    name: Exportar e publicar
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: bobina/tools/edgetam
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ver se já foi publicado
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "A Release $RELEASE_TAG já existe; nada a fazer."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.existing.outputs.published == 'false'
+        with:
+          python-version: '3.12'
+
+      - name: Instalar PyTorch (CPU) e dependências
+        if: steps.existing.outputs.published == 'false'
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchvision==0.29.1
+          pip install -r requirements.txt
+
+      - name: Exportar e conferir com o PyTorch
+        if: steps.existing.outputs.published == 'false'
+        run: python export.py --out out --check
+
+      - name: Publicar a Release
+        if: steps.existing.outputs.published == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$RELEASE_TAG" out/*.onnx out/manifest.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Modelos do recorte com laço (EdgeTAM)" \
+            --notes "Os quatro grafos ONNX do EdgeTAM (Meta, Apache-2.0, https://huggingface.co/facebook/EdgeTAM) usados pelo recorte com laço do Ledit's, exportados por bobina/tools/edgetam/export.py e conferidos contra o PyTorch. O app baixa estes arquivos sob demanda."

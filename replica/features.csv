@@ -1,0 +1,104 @@
+feature,area,priority,original,clone,notes
+Criar projeto novo a partir da mídia do aparelho,projetos,must,yes,yes,S01 S02; código pronto e compilado; falta testar num aparelho
+Lista de projetos com miniatura nome duração e data,projetos,must,yes,yes,S01; código pronto e compilado; falta testar num aparelho
+Salvamento automático a cada alteração,projetos,must,yes,yes,F15; gravação atômica 400 ms depois de cada edição
+Reabrir projeto e continuar editando,projetos,must,yes,yes,F15; código pronto e compilado; falta testar num aparelho
+Renomear duplicar e excluir projeto,projetos,should,yes,yes,F17; código pronto e compilado; falta testar num aparelho
+Aviso de mídia ausente com opção de substituir,projetos,should,yes,yes,"o app guarda cópias das mídias (apagar da galeria não quebra); ao abrir confere os arquivos: aviso no topo, clipe marcado na timeline, preto na prévia e na exportação; Substituir troca a mídia"
+Selecionar vários vídeos e fotos na ordem escolhida,importação,must,yes,yes,S02; seletor do sistema com seleção em ordem
+Tratar permissão de galeria negada ou parcial,importação,must,yes,yes,Android 14+ e iOS têm acesso parcial; o seletor do sistema não pede permissão de galeria
+Fotos entram com duração padrão editável,importação,must,yes,yes,"duração padrão a confirmar; 3 s, ajustável pelas alças"
+Vídeos HEVC/HDR e vertical com horizontal no mesmo projeto,importação,must,yes,partial,rotação e HEVC tratados; HDR sem mapeamento de tom
+Pré-visualizar a mídia antes de adicionar,importação,could,yes,partial,o seletor do sistema mostra a prévia
+Preview com play/pause e tempo atual/total,editor,must,yes,yes,S03; código pronto e compilado; falta testar num aparelho
+Timeline com miniaturas e agulha fixa no centro,editor,must,yes,yes,S03; código pronto e compilado; falta testar num aparelho
+Zoom da timeline com pinça,editor,must,yes,yes,S03; código pronto e compilado; falta testar num aparelho
+Adicionar mais mídia ao projeto aberto,editor,must,yes,yes,botão + da faixa principal; botão + e botão Adicionar; entra na posição da agulha
+Reordenar clipes segurando e arrastando,editor,must,yes,yes,F04; código pronto e compilado; falta testar num aparelho
+Desfazer e refazer,editor,must,yes,yes,F16; histórico de 100 passos; gestos contínuos viram um passo
+Silenciar o áudio original de todos os clipes,editor,should,yes,yes,código pronto e compilado; falta testar num aparelho
+Ímã na agulha e nas bordas dos clipes,editor,should,yes,yes,com vibração ao encaixar
+Preview em tela cheia,editor,could,yes,yes,renderiza no tamanho da tela enquanto aberta
+Escolher a capa do vídeo,editor,could,yes,yes,quadro da agulha vira a capa em Meus projetos
+Cortar início e fim arrastando as alças,clipe,must,yes,yes,F02; código pronto e compilado; falta testar num aparelho
+Dividir o clipe na agulha,clipe,must,yes,yes,F03; código pronto e compilado; falta testar num aparelho
+Excluir clipe e fechar o espaço,clipe,must,yes,yes,F03; código pronto e compilado; falta testar num aparelho
+Duplicar clipe,clipe,should,yes,yes,código pronto e compilado; falta testar num aparelho
+Girar 90° espelhar e recortar,clipe,should,yes,yes,"S19; recorte por proporções centradas, sem recorte livre"
+Mover e escalar o clipe na preview com gestos,clipe,should,yes,yes,"arrastar, pinça e girar com dois dedos"
+Substituir a mídia do clipe,clipe,could,yes,yes,código pronto e compilado; falta testar num aparelho
+Congelar quadro,clipe,could,yes,yes,quadro exato vira foto de 3 s entre as partes do clipe (faixa principal)
+Reproduzir ao contrário,clipe,could,yes,yes,"cópia invertida em blocos, até 1440p; combina com velocidade"
+Opacidade do clipe,clipe,could,yes,yes,código pronto e compilado; falta testar num aparelho
+Animações de entrada e saída do clipe,clipe,could,yes,yes,10 animações próprias
+Keyframes de posição escala rotação e opacidade,clipe,could,yes,yes,"clipes, sobreposições e textos; curva suave ou constante; acompanha cortar, dividir e velocidade"
+Máscaras,clipe,could,yes,no,
+Estabilização,clipe,could,yes,no,difícil: precisa de análise de movimento
+Velocidade constante de 0.1x a 100x,velocidade,must,yes,yes,S05; cópia acelerada feita em segundo plano (o motor toca a 1x)
+Manter o tom de voz ao mudar a velocidade,velocidade,should,yes,yes,WSOLA em TypeScript
+Curvas de velocidade,velocidade,could,yes,no,
+Câmera lenta suave por fluxo óptico,velocidade,could,yes,no,difícil
+Importar áudio do próprio aparelho,áudio,must,yes,yes,arquivos do usuário; sem biblioteca; arquivos com DRM de apps de música não abrem
+Volume por clipe de vídeo e de áudio,áudio,must,yes,yes,S06; 0 a 200% (acima de 100% amplificado com limitador suave no WAV processado)
+Dividir cortar e mover clipe de áudio,áudio,must,yes,yes,S09; código pronto e compilado; falta testar num aparelho
+Extrair o áudio de um vídeo,áudio,should,yes,yes,F09; do clipe no projeto ou de outro vídeo da galeria
+Gravar narração com o microfone,áudio,should,yes,yes,F08; código pronto e compilado; falta testar num aparelho
+Fade in e fade out,áudio,should,yes,yes,S06; áudio processado por clipe em WAV
+Forma de onda nos clipes de áudio,áudio,should,yes,yes,código pronto e compilado; falta testar num aparelho
+Várias faixas de áudio,áudio,should,yes,yes,camadas automáticas
+Redução de ruído,áudio,could,yes,no,fonte 1
+Marcar batidas da música,áudio,could,yes,no,
+Biblioteca de músicas e efeitos sonoros,áudio,could,yes,skip,conteúdo licenciado do CapCut (termos seção 9) e decisão do usuário
+Adicionar texto com fonte cor e tamanho,texto,must,yes,yes,fontes abertas no lugar das deles; 8 fontes abertas
+Contorno sombra e fundo do texto,texto,must,yes,yes,S07; código pronto e compilado; falta testar num aparelho
+Mover girar e escalar o texto na preview,texto,must,yes,yes,S07; código pronto e compilado; falta testar num aparelho
+Ajustar a duração do texto na timeline,texto,must,yes,yes,F06; código pronto e compilado; falta testar num aparelho
+Animação de entrada saída e loop do texto,texto,should,yes,yes,fonte 6; código pronto e compilado; falta testar num aparelho
+Alinhamento e opacidade do texto,texto,should,yes,yes,código pronto e compilado; falta testar num aparelho
+Guias de alinhamento ao centro na preview,texto,should,yes,yes,ímã no centro com vibração e linhas-guia enquanto encaixado
+Importar fonte do aparelho,texto,could,yes,no,fonte 2
+Modelos e efeitos de texto prontos do CapCut,texto,could,yes,skip,materiais do CapCut (termos seção 9)
+Gerar legendas automáticas pela fala,legendas,must,yes,yes,S15; Whisper no aparelho; modelo baixado uma vez
+Escolher o idioma da fala,legendas,must,yes,yes,S15; 7 idiomas + detectar
+Editar o texto de uma legenda,legendas,must,yes,yes,F10; código pronto e compilado; falta testar num aparelho
+Aplicar um estilo a todas as legendas,legendas,must,yes,yes,S16; código pronto e compilado; falta testar num aparelho
+Escolher a origem: áudio do vídeo narração ou ambos,legendas,should,yes,yes,fonte 5; código pronto e compilado; falta testar num aparelho
+Edição em lote de todas as legendas,legendas,should,yes,yes,"S16; editar, dividir no cursor, juntar e excluir"
+Ajustar o tempo de cada legenda na timeline,legendas,should,yes,yes,código pronto e compilado; falta testar num aparelho
+Destaque palavra por palavra,legendas,could,yes,yes,cor da palavra ou fundo atrás dela; usa o tempo de cada palavra da transcrição
+Filtros com intensidade,filtros,must,yes,yes,filtros feitos do zero; 12 filtros próprios
+Ajustes de brilho contraste saturação exposição e temperatura,filtros,must,yes,yes,S11; código pronto e compilado; falta testar num aparelho
+Ajustes de realces sombras nitidez vinheta e matiz,filtros,should,yes,yes,S11; shader SkSL próprio
+Aplicar filtro ou ajuste a todos os clipes,filtros,should,yes,yes,código pronto e compilado; falta testar num aparelho
+Filtro ou ajuste como camada num trecho da timeline,filtros,could,yes,no,
+Roda de cores,filtros,could,yes,no,fonte 1
+Efeitos de vídeo (glitch desfoque etc.),efeitos,could,yes,yes,"8 efeitos próprios: desfoque, tremida, glitch, RGB, VHS, pixelado, pulsar e flash"
+Transição entre dois clipes com duração ajustável,transições,must,yes,yes,S12; código pronto e compilado; falta testar num aparelho
+Conjunto básico: dissolver fade deslizar e zoom,transições,must,yes,yes,feitas do zero; 12 transições próprias
+Aplicar a transição a todos os cortes,transições,should,yes,yes,código pronto e compilado; falta testar num aparelho
+Proporções 9:16 16:9 1:1 4:3 3:4 e 4:5,formato,must,yes,yes,S13; código pronto e compilado; falta testar num aparelho
+Fundo com cor desfoque ou imagem,formato,should,yes,yes,S14; código pronto e compilado; falta testar num aparelho
+Reenquadrar mantendo o assunto,formato,could,yes,no,fonte 1; precisa de detecção automática
+Sobreposição de vídeo ou foto sobre o principal,sobreposição,should,yes,yes,S18; código pronto e compilado; falta testar num aparelho
+Modos de mistura,sobreposição,could,yes,yes,7 modos
+Chroma key,sobreposição,could,yes,yes,"tela verde, azul ou outra cor; intensidade e suavidade da borda; clipes e sobreposições"
+Exportar MP4 para a galeria,exportação,must,yes,yes,S17; H.264 + AAC
+Escolher a resolução (720p 1080p e 2K/4K conforme o aparelho),exportação,must,yes,yes,fonte 4; ajustada ao codificador do aparelho no Android
+Progresso e cancelar a exportação,exportação,must,yes,yes,S17; código pronto e compilado; falta testar num aparelho
+Escolher fps,exportação,should,yes,yes,valores a confirmar; 24 a 60
+Compartilhar pela folha do sistema após exportar,exportação,should,yes,yes,código pronto e compilado; falta testar num aparelho
+Tamanho estimado do arquivo,exportação,could,yes,yes,estimativa pela taxa de bits
+Exportação continua em segundo plano,exportação,could,yes,no,a confirmar no CapCut; a tela fica ligada; sair do app interrompe
+Exportar em HDR,exportação,could,yes,no,fonte 2
+Configurações com resolução padrão e limpar cache,configurações,could,yes,partial,"S20; espaço usado, limpar caches e modelos; a resolução fica salva por projeto"
+Banco de vídeos e fotos para baixar,mídia,could,yes,skip,conteúdo licenciado e decisão do usuário
+Modelos (templates) prontos,modelos,could,yes,skip,conteúdo e rede de criadores do CapCut
+Figurinhas e efeitos da biblioteca do CapCut,efeitos,could,yes,skip,materiais do CapCut (termos seção 9)
+IA generativa: vídeo por texto avatar e dublagem,IA,could,yes,skip,fora do escopo escolhido
+Remover fundo voz por IA e texto para fala,IA,could,yes,skip,fora do escopo escolhido; só legendas automáticas entram
+Conta login e espaço na nuvem,conta,could,yes,skip,projeto pessoal sem servidor
+Compartilhar direto no TikTok,compartilhamento,could,yes,skip,integração de parceiro; usamos a folha do sistema
+Câmera com efeitos e maquiagem,câmera,could,yes,skip,o foco é editar
+Assinatura Pro,pagamentos,could,yes,skip,projeto pessoal
+Clipe final com a marca do CapCut,exportação,could,yes,skip,é a marca deles
+Baixar o áudio de um clipe em MP3,áudio,could,yes,yes,"como toca na timeline (trecho, velocidade, inverso, volume, fades); 192 kbps; salvar numa pasta ou compartilhar"
